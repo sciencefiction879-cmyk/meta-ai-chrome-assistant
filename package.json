@@ -1,0 +1,29 @@
+{
+  "name": "meta-ai-chrome-assistant-extension",
+  "version": "3.6.0",
+  "description": "Production-ready Chrome Extension for automating and managing multiple Meta.ai chat tabs.",
+  "type": "module",
+  "scripts": {
+    "dev": "node build.js --watch",
+    "build": "tsc --noEmit && node build.js",
+    "test": "npx tsx src/test/unitTest.ts"
+  },
+  "keywords": [
+    "chrome-extension",
+    "meta.ai",
+    "automation",
+    "manifest-v3"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.308",
+    "@types/node": "^22.13.5",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0"
+  }
+}

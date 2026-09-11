@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meta.ai Assistant Side Panel</title>
+  <script type="module" crossorigin src="./assets/modulepreload-polyfill-B5Qt9EMX.js"></script>
+  <script type="module" crossorigin src="./assets/normalizer-hPn34PGC.js"></script>
+  <script type="module" crossorigin src="./assets/partDetector-B6NbLD8-.js"></script>
+  <script type="module" crossorigin src="./assets/dashboard-BVpUvaQU.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/normalizer-DNN4QJpa.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="logo-badge">META v3.6</span>
+        <div class="header-title">
+          <h1>Meta.ai Chrome Assistant</h1>
+          <p>Autonomous Multi-Tab Video Script Automation & Orchestrator</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-sync-all-header" class="btn btn-sm btn-primary" title="Reconcile and synchronize all open Meta.ai tabs">🔄 Sync Tabs</button>
+        <button id="btn-open-sidepanel" class="btn btn-sm">Open in Side Panel</button>
+        <button id="btn-reset-workflow" class="btn btn-sm btn-danger">Reset Workflow</button>
+        <button id="btn-toggle-debug" class="btn btn-sm">Debug Mode</button>
+      </div>
+    </header>
+
+    <!-- Quick Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <span class="stat-label">Total Tabs</span>
+        <span class="stat-value" id="stat-total">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Ready</span>
+        <span class="stat-value" style="color: var(--success);" id="stat-ready">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Running</span>
+        <span class="stat-value" style="color: #60a5fa;" id="stat-running">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Completed</span>
+        <span class="stat-value" style="color: var(--success);" id="stat-completed">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Incomplete</span>
+        <span class="stat-value" style="color: var(--warning);" id="stat-incomplete">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Errors</span>
+        <span class="stat-value" style="color: var(--error);" id="stat-errors">0</span>
+      </div>
+      <div class="stat-card progress-card">
+        <div style="display: flex; justify-content: space-between;">
+          <span class="stat-label">Overall Progress</span>
+          <span id="stat-progress-pct" style="font-weight: 700;">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workflow Mode Selection Card -->
+    <section class="section-card" id="sec-card-script-mode" style="border-left: 4px solid #3b82f6;">
+      <div class="section-header" data-toggle="sec-mode-body" style="padding: 12px 18px;">
+        <div class="section-title">
+          <span>WORKFLOW MODE SELECTION</span>
+          <span class="section-badge" id="badge-current-mode" style="background: rgba(59, 130, 246, 0.25); color: #93c5fd; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.5);">ORIGINAL SCRIPT MODE</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-mode-body">
+        <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap; padding: 4px 0;">
+          <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; cursor: pointer; color: #fff; background: rgba(255,255,255,0.05); padding: 8px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+            <input type="radio" name="script-mode" id="radio-mode-original" value="original" checked style="cursor: pointer;" />
+            <span>✍️ Original Script Mode</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; cursor: pointer; color: #fff; background: rgba(255,255,255,0.05); padding: 8px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+            <input type="radio" name="script-mode" id="radio-mode-competitor" value="competitor" style="cursor: pointer;" />
+            <span>📑 Competitor Script Mode</span>
+          </label>
+        </div>
+        <div id="mode-description-text" style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
+          • <strong>Original Script Mode</strong>: Outline generation workflow (Outline → Wait for <code>OUTLINE = GENERATED</code> → Write Part 1..N). Competitor scripts hidden and not required.
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 1: TAB DUPLICATOR -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-duplicator">
+        <div class="section-title">
+          <span>1. TAB DUPLICATOR</span>
+          <span class="section-badge">Duplicate Active Meta.ai Chat</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-duplicator">
+        <div class="form-group">
+          <label>Optional Initial Message / Prompt (Transferred to every duplicated tab):</label>
+          <input type="text" id="dup-initial-message" placeholder="e.g. Create the following videos according to my instructions." />
+        </div>
+        <div class="form-row">
+          <label style="align-self: center;">Number of Copies:</label>
+          <button class="btn btn-sm btn-dup-preset" data-count="1">1</button>
+          <button class="btn btn-sm btn-dup-preset" data-count="5">5</button>
+          <button class="btn btn-sm btn-dup-preset" data-count="10">10</button>
+          <button class="btn btn-sm btn-dup-preset" data-count="20">20</button>
+          <button class="btn btn-sm btn-dup-preset" data-count="50">50</button>
+          <input type="number" id="dup-custom-count" placeholder="Custom" min="1" max="500" style="width: 80px;" />
+        </div>
+
+        <!-- Custom Video ID Range Selection (Function 1) -->
+        <div class="form-row range-selector-card" style="align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; margin-bottom: 8px; padding: 10px 14px; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-weight: 700; color: #60a5fa; font-size: 13px; margin-bottom: 0;">Video ID Range:</label>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 4px; margin-left: 6px;">
+            <span style="font-size: 12px; color: #94a3b8;">Start:</span>
+            <span style="font-weight: bold; color: #38bdf8;">V</span>
+            <input type="number" id="dup-range-start" min="1" max="1000" value="1" placeholder="1" style="width: 75px; padding: 4px 8px; background: #0f172a; color: #fff; border: 1px solid #475569; border-radius: 4px; font-weight: 600;" />
+          </div>
+
+          <span style="color: #94a3b8; font-size: 12px; font-weight: bold;">to</span>
+
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <span style="font-size: 12px; color: #94a3b8;">End:</span>
+            <span style="font-weight: bold; color: #38bdf8;">V</span>
+            <input type="number" id="dup-range-end" min="1" max="1000" value="5" placeholder="5" style="width: 75px; padding: 4px 8px; background: #0f172a; color: #fff; border: 1px solid #475569; border-radius: 4px; font-weight: 600;" />
+          </div>
+
+          <!-- Live Range Preview Badge -->
+          <div id="dup-range-badge" style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.5); padding: 4px 10px; border-radius: 5px; font-size: 12px; font-weight: 600; color: #93c5fd;">
+            Selected: <strong id="dup-range-preview" style="color: #38bdf8;">V1–V5</strong> (<span id="dup-range-count" style="color: #34d399;">5 Tabs</span>)
+          </div>
+
+          <button id="btn-duplicate-chats" class="btn btn-primary" style="font-weight: 700; padding: 6px 16px; margin-left: auto;">
+            ⚡ Duplicate Chats (V1–V5)
+          </button>
+          <div id="dup-range-validation-msg" style="width: 100%; display: none; color: #f87171; font-size: 11px; font-weight: 600; margin-top: 4px;"></div>
+        </div>
+        <p class="text-secondary" style="font-size: 11px;">
+          Make sure one Meta.ai chat tab is currently active. The extension will duplicate it and assign the specified custom Video ID range (e.g. V20, V21, ...).
+        </p>
+      </div>
+    </section>
+
+    <!-- Section 2: TAB MANAGER -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-tab-manager">
+        <div class="section-title">
+          <span>2. TAB MANAGER</span>
+          <span class="section-badge" id="tab-count-badge">0 Tabs</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-tab-manager">
+        <div class="form-row" style="justify-content: space-between;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="btn-select-all" class="btn btn-sm">Select All</button>
+            <button id="btn-deselect-all" class="btn btn-sm">Deselect All</button>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <label>Select Range:</label>
+            <button class="btn btn-sm btn-range-preset" data-range="1-10">V1–V10</button>
+            <button class="btn btn-sm btn-range-preset" data-range="11-20">V11–V20</button>
+            <button class="btn btn-sm btn-range-preset" data-range="21-30">V21–V30</button>
+            <input type="text" id="custom-range-input" placeholder="e.g. 1-15" style="width: 75px;" />
+            <button id="btn-apply-range" class="btn btn-sm">Apply</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 32px;"><input type="checkbox" id="chk-table-master" /></th>
+                <th>ID</th>
+                <th>Tab ID</th>
+                <th>Title</th>
+                <th>Thumbnail</th>
+                <th>Script</th>
+                <th>Status</th>
+                <th>Parts</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tabs-table-body">
+              <tr>
+                <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 18px;">
+                  No Meta.ai tabs managed yet. Use Section 1 to duplicate chats.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: TITLE MANAGER -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-title-manager">
+        <div class="section-title">
+          <span>3. TITLE INPUT SYSTEM</span>
+          <span class="section-badge">Sequential Title Assignment</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-title-manager">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <!-- Option A: TXT File Upload -->
+          <div class="form-group">
+            <label>Option A — Upload TXT File:</label>
+            <div class="dropzone" id="dropzone-titles">
+              <div class="dropzone-icon">📄</div>
+              <div>Drop titles .txt file here or click to browse</div>
+              <input type="file" id="file-titles-input" accept=".txt" style="display: none;" />
+            </div>
+          </div>
+          <!-- Option B: Direct Paste -->
+          <div class="form-group">
+            <label>Option B — Direct Paste (One title per line):</label>
+            <textarea id="txt-titles-paste" placeholder="Title 1&#10;Title 2&#10;Title 3..."></textarea>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Assign to Range:</label>
+          <input type="number" id="title-range-start" placeholder="Start V" min="1" style="width: 80px;" />
+          <span>to</span>
+          <input type="number" id="title-range-end" placeholder="End V" min="1" style="width: 80px;" />
+          <button id="btn-assign-titles" class="btn btn-primary">Assign Titles to Tabs</button>
+          <span id="title-parse-summary" style="color: var(--text-secondary); font-size: 11px; margin-left: 10px;"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: MASTER PROMPT -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-master-prompt">
+        <div class="section-title">
+          <span>4. MASTER PROMPT</span>
+          <span class="section-badge">Single Prompt Distributed Sequentially</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-master-prompt">
+        <div class="form-group">
+          <label>MASTER PROMPT (Appended under each tab's title as: [TITLE] + [MASTER PROMPT]):</label>
+          <textarea id="txt-master-prompt" style="min-height: 100px;" placeholder="Write your master video script prompt here..."></textarea>
+        </div>
+        <div class="form-row">
+          <button id="btn-apply-prompt-selected" class="btn btn-primary">Apply Master Prompt to Selected Tabs</button>
+          <button id="btn-apply-prompt-all" class="btn">Apply to All Managed Tabs</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 5: THUMBNAIL MANAGER -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-thumbnails">
+        <div class="section-title">
+          <span>5. THUMBNAIL MANAGER</span>
+          <span class="section-badge">Auto-Map Thumbnail 1 → V1, etc.</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-thumbnails">
+        <div class="dropzone" id="dropzone-thumbnails">
+          <div class="dropzone-icon">🖼️</div>
+          <div>Drop multiple thumbnail images here or click to browse</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            Supports PNG, JPG, WEBP. Names like "Thumbnail 1", "V1.png" are mapped automatically.
+          </div>
+          <input type="file" id="file-thumbnails-input" accept="image/*" multiple style="display: none;" />
+        </div>
+        <div id="thumbnails-status-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+      </div>
+    </section>
+
+    <!-- Section 6: COMPETITOR SCRIPT (OPTIONAL) -->
+    <section class="section-card" id="sec-card-competitor-script">
+      <div class="section-header" data-toggle="sec-scripts">
+        <div class="section-title">
+          <span>6. COMPETITOR SCRIPT</span>
+          <span class="section-badge" id="badge-competitor-script-status">Optional Input (Disabled)</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-scripts">
+        <!-- Optional checkbox -->
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 14px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: #fbbf24;">
+            <input type="checkbox" id="chk-competitor-script-enabled" style="accent-color: #f59e0b; width: 18px; height: 18px;" />
+            Include Competitor Script (Optional)
+          </label>
+          <span style="font-size: 11px; color: var(--text-secondary);">
+            Unchecked by default. Tick to paste and attach competitor script to your workflow.
+          </span>
+        </div>
+
+        <!-- Designated Input Area: only visible when enabled -->
+        <div id="competitor-script-input-container" style="display: none; flex-direction: column; gap: 10px;">
+          <div>
+            <label style="font-size: 12px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">
+              Designated Competitor Script Input Area:
+            </label>
+            <textarea id="txt-competitor-script" rows="6" placeholder="Paste your competitor's script here... Once pasted, it will automatically synchronize across your workflow and embed into Meta.ai chats." style="width: 100%; box-sizing: border-box; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 12px; padding: 10px; resize: vertical;"></textarea>
+          </div>
+
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button type="button" id="btn-save-competitor-script" class="btn btn-sm btn-primary">💾 Save & Sync Script</button>
+            <button type="button" id="btn-push-scripts-to-chats" class="btn btn-sm btn-warning" title="Embeds competitor script text into Meta.ai chat inputs">📄 Push / Embed Script to Chats</button>
+            <button type="button" id="btn-clear-scripts" class="btn btn-sm btn-danger">Clear Script</button>
+            <span id="script-sync-indicator" style="font-size: 11px; color: var(--success); display: none;">✓ Synced</span>
+          </div>
+
+          <!-- File upload fallback -->
+          <div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">
+              Optional alternative: Drop individual script files (e.g. V1 Script.txt, V2 Script.txt) to map sequentially.
+            </div>
+            <div class="dropzone" id="dropzone-scripts">
+              <div class="dropzone-icon">📝</div>
+              <div>Drop script files here or click to browse</div>
+              <input type="file" id="file-scripts-input" accept=".txt,.docx,.pdf" multiple style="display: none;" />
+            </div>
+            <div id="scripts-status-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 7: EXECUTION CONTROL -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-execution">
+        <div class="section-title">
+          <span>7. EXECUTION CONTROL</span>
+          <span class="section-badge">Automated Processing Engine</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-execution">
+        <!-- Global Preparation Status -->
+        <div id="global-readiness-panel" style="margin-bottom: 15px; padding: 12px; background: rgba(30, 41, 59, 0.5); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">Global Verification Tracker:</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 13px;">
+            <div>✍️ Prompts: <strong id="ready-titles" style="color:#60a5fa">0/0</strong></div>
+            <div>🖼️ Thumbnails: <strong id="ready-thumbs" style="color:#34d399">0/0</strong></div>
+            <div>📝 Scripts: <strong id="ready-scripts" style="color:#f43f5e">0/0</strong></div>
+          </div>
+        </div>
+
+        <div class="form-row" style="align-items: center; justify-content: space-between;">
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button id="btn-run-all" class="btn btn-success" style="font-weight: bold;">🚀 RUN ALL CHATS (5s–15s Paced)</button>
+            <button id="btn-run-selected" class="btn btn-primary">▶ RUN SELECTED</button>
+            <button id="btn-pause-all" class="btn btn-warning">⏸ PAUSE ALL</button>
+            <button id="btn-resume-all" class="btn">▶ RESUME</button>
+            <button id="btn-stop-all" class="btn btn-danger">⏹ STOP</button>
+            <button id="btn-retry-failed" class="btn">🔄 RETRY FAILED</button>
+          </div>
+          <!-- Automation / Auto Run Toggle for Subsequent Parts -->
+          <div style="width: 100%; margin-top: 10px; margin-bottom: 12px; padding: 10px 14px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: #60a5fa;">
+              <input type="checkbox" id="chk-auto-next-part" style="accent-color: #3b82f6; width: 18px; height: 18px;" />
+              ⚡ Auto Run Subsequent Parts (Part 2, Part 3, Part 4...)
+            </label>
+            <span style="font-size: 11px; color: var(--text-secondary);">
+              <span style="color: #fbbf24; font-weight: 600;">OFF (Manual Mode - Default):</span> Pauses after Part 1 and waits for your manual Alt-Tab action. &bull; 
+              <span style="color: #34d399; font-weight: 600;">ON:</span> Automatically requests next parts.
+            </span>
+          </div>
+
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <label>Concurrency Limit:</label>
+            <select id="sel-concurrency" style="width: 70px;">
+              <option value="1">1 tab</option>
+              <option value="2" selected>2 tabs</option>
+              <option value="3">3 tabs</option>
+              <option value="5">5 tabs</option>
+            </select>
+          </div>
+        </div>
+        <div id="execution-validation-banner" style="display: none;" class="diag-card"></div>
+      </div>
+    </section>
+
+    <!-- Section 8: PART TRACKER -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-part-tracker">
+        <div class="section-title">
+          <span>8. PART TRACKER</span>
+          <span class="section-badge">Real-time Part Progress per Tab</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-part-tracker">
+        <div id="part-tracker-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+          <div style="color: var(--text-muted); font-size: 12px;">No active parts tracked yet.</div>
+        </div>
+        <!-- Load Parts into Download Manager container (appears when synchronized) -->
+        <div id="load-parts-btn-container"></div>
+      </div>
+    </section>
+
+    <!-- Section 9: DOWNLOAD MANAGER -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-downloads">
+        <div class="section-title">
+          <span>9. DOWNLOAD MANAGER</span>
+          <span class="section-badge" id="download-manager-badge">Empty (Waiting for Load)</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-downloads">
+        <div id="downloads-actions-bar" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+          <button id="btn-download-all" class="btn btn-success" style="font-weight: bold;">📥 DOWNLOAD ALL MERGED (TXT Files)</button>
+          <button id="btn-download-all-zip" class="btn btn-primary">📦 Download All Merged as ZIP</button>
+          <button id="btn-download-all-parts-zip" class="btn btn-warning">📁 Download All Individual Parts (ZIP)</button>
+          <button id="btn-clear-dm" class="btn btn-secondary" style="font-size: 11px; margin-left: auto;">🔄 Clear / Reset View</button>
+        </div>
+        
+        <!-- Hierarchical Video Tree Container -->
+        <div id="downloads-tree-container">
+          <div style="text-align: center; padding: 32px 16px; color: var(--text-muted); font-size: 13px;">
+            <div style="font-size: 28px; margin-bottom: 8px;">⏳</div>
+            <strong>Download Manager is empty.</strong>
+            <div style="font-size: 12px; margin-top: 4px; color: var(--text-secondary);">
+              Waiting for complete script generation. Once parts appear and synchronize in <strong>Section 8 (Part Tracker)</strong>, click <strong>"Load Parts into Download Manager"</strong> to populate this section.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 10: ACTIVITY LOG & HUMAN-READABLE ERRORS -->
+    <section class="section-card">
+      <div class="section-header" data-toggle="sec-activity-log">
+        <div class="section-title">
+          <span>10. ACTIVITY LOG & DIAGNOSTICS</span>
+          <span class="section-badge" id="log-count-badge">0 Logs</span>
+        </div>
+        <span>▼</span>
+      </div>
+      <div class="section-body" id="sec-activity-log">
+        <div class="form-row" style="justify-content: space-between;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <label>Filter:</label>
+            <button class="btn btn-sm btn-filter-log active" data-level="ALL">ALL</button>
+            <button class="btn btn-sm btn-filter-log" data-level="INFO">INFO</button>
+            <button class="btn btn-sm btn-filter-log" data-level="SUCCESS">SUCCESS</button>
+            <button class="btn btn-sm btn-filter-log" data-level="WARNING">WARNING</button>
+            <button class="btn btn-sm btn-filter-log" data-level="ERROR">ERROR</button>
+          </div>
+          <button id="btn-export-log" class="btn btn-sm">Export Activity Log (.txt)</button>
+        </div>
+        <div class="log-box" id="activity-log-container"></div>
+      </div>
+    </section>
+
+    <!-- Debug Mode Panel (collapsible) -->
+    <section class="section-card" id="sec-debug-panel" style="display: none;">
+      <div class="section-header">
+        <div class="section-title"><span>DEVELOPER DEBUG PANEL</span></div>
+      </div>
+      <div class="section-body">
+        <pre id="debug-json-view" style="font-size: 10px; max-height: 200px; overflow-y: auto; color: #a5b4fc;"></pre>
+      </div>
+    </section>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <h3 id="modal-title" style="font-size: 15px; font-weight: 700;">Confirm Action</h3>
+      <p id="modal-desc" style="font-size: 12px; color: var(--text-secondary);"></p>
+      <div class="modal-actions">
+        <button id="modal-btn-cancel" class="btn">Cancel</button>
+        <button id="modal-btn-confirm" class="btn btn-danger">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
