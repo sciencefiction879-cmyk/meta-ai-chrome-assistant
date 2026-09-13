@@ -5,6 +5,7 @@ import { createDiagnosticError } from '../utils/diagnostics';
 import { createTxtBlob, triggerDownload, formatMergedScriptPart } from '../utils/fileHelper';
 import { formatPromptWithTitle, generateWritePartPrompt } from '../utils/normalizer';
 import { detectPartsInText, extractStartingExplicitMarker, extractTopExplicitMarker, detectOutlineInText, findExplicitMarkersInText } from '../utils/partDetector';
+import { validateVideoMerge } from '../utils/mergeValidator';
 
 class MetaContentController {
   private adapter: MetaAdapter;
@@ -770,6 +771,23 @@ class MetaContentController {
   private handleDownloadParts(): void {
     if (!this.currentTabState) return;
     const vId = this.currentTabState.id;
+
+    // Strict Pre-Merge Validation: Expected === Detected Completed === Merged
+    const val = validateVideoMerge(this.currentTabState);
+    if (!val.valid) {
+      const missingStr = val.missingParts && val.missingParts.length > 0
+        ? val.missingParts.map((n) => `P${n}`).join(', ')
+        : `${val.completedPartsCount}/${this.currentTabState.totalParts || '?'}`;
+      alert(
+        `⛔ MERGE INCOMPLETE — ${vId} ${missingStr} MISSING\n\n` +
+        `Expected Parts: ${this.currentTabState.totalParts || 'Unknown'}\n` +
+        `Completed Parts: ${val.completedPartsCount}\n` +
+        (val.missingParts && val.missingParts.length > 0 ? `Missing Parts: ${val.missingParts.map((n) => `${vId} P${n}`).join(', ')}\n\n` : '\n') +
+        `All ${this.currentTabState.totalParts || 'required'} parts must be completed with their matching completion markers before merging.`
+      );
+      return;
+    }
+
     const doneParts = this.currentTabState.parts.filter(
       (p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline
     );

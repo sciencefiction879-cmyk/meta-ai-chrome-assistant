@@ -1949,7 +1949,6 @@ class BackgroundServiceWorker {
 
     await Promise.all(syncPromises);
     await this.persist();
-    this.broadcastState();
     this.addLog('SUCCESS', `Resynced ${updatedCount} managed tabs from live DOM.`);
     return this.state.tabs;
   }

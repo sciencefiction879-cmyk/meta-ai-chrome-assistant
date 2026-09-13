@@ -13,6 +13,7 @@ export interface MergeValidationResult {
   totalParts: number;
   completedPartsCount: number;
   missingParts: number[];
+  duplicateParts?: number[];
   checks: ValidationCheck[];
   errors: string[];
   warnings: string[];
