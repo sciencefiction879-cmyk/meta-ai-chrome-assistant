@@ -385,22 +385,10 @@ class BackgroundServiceWorker {
         return { success: true };
       }
 
-      case 'REFRESH_ALL_TABS': {
-        const tabs = await this.reconcileAndInjectTabs();
-        this.addLog('INFO', `Re-synced and verified ${tabs.length} managed Meta.ai tabs in-place.`);
-        return { success: true, tabs };
-      }
-
+      case 'REFRESH_ALL_TABS':
       case 'RESYNC_ALL_TABS': {
-        // Global resync across all managed tabs triggered from any tab
-        for (const tab of this.state.tabs) {
-          if (tab.chromeTabId) {
-            chrome.tabs.sendMessage(tab.chromeTabId, { type: 'SCAN_DOM_NOW', tab }).catch(() => {});
-          }
-        }
-        this.addLog('INFO', `Global Re-sync: Requested live DOM scan across all ${this.state.tabs.length} managed tabs.`);
-        await this.persist();
-        return { success: true, tabs: this.state.tabs };
+        const tabs = await this.resyncAllTabs();
+        return { success: true, tabs };
       }
 
       case 'REMOVE_TAB': {
@@ -1014,13 +1002,24 @@ class BackgroundServiceWorker {
               if (newPart.videoNumber) {
                 existing.videoNumber = newPart.videoNumber;
               }
-              existing.status = newPart.status;
+              if (existing.status === 'done' && newPart.status !== 'done') {
+                // Keep 'done'
+              } else {
+                existing.status = newPart.status;
+              }
             } else {
               tab.parts.push({ ...newPart });
             }
           }
 
           tab.parts.sort((a, b) => a.partNumber - b.partNumber);
+
+          const val = validateVideoMerge(tab);
+          tab.mergeValidationStatus = val.valid ? 'valid' : 'invalid';
+          if (val.valid) {
+            tab.status = 'completed';
+          }
+          this.recalculateTabStatus(tab);
 
           // Log warning if missing parts detected
           if (tab.missingParts && tab.missingParts.length > 0) {
@@ -1885,6 +1884,74 @@ class BackgroundServiceWorker {
     if (this.state.logs.length > 500) {
       this.state.logs.pop();
     }
+  }
+
+  /**
+   * Resyncs all managed tabs by querying their content scripts in parallel.
+   * Scans DOM for parts, updates part state, completion status, and broadcasts HUD updates.
+   */
+  public async resyncAllTabs(): Promise<VTab[]> {
+    this.addLog('INFO', 'Starting parallel resync across all managed tabs...');
+    const allTabs = await chrome.tabs.query({});
+    const liveTabIds = new Set(allTabs.map((t) => t.id).filter((id): id is number => id !== undefined));
+
+    let updatedCount = 0;
+    const syncPromises = this.state.tabs.map(async (vTab) => {
+      if (!vTab.chromeTabId || !liveTabIds.has(vTab.chromeTabId)) {
+        return;
+      }
+      try {
+        const resp = await new Promise<any>((resolve) => {
+          chrome.tabs.sendMessage(
+            vTab.chromeTabId!,
+            { type: 'RESYNC_DOM_NOW', tab: vTab },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                resolve(null);
+              } else {
+                resolve(response);
+              }
+            }
+          );
+          setTimeout(() => resolve(null), 1500);
+        });
+
+        const parts = (resp && (resp.parts || (resp.tab && resp.tab.parts))) || null;
+        if (parts && Array.isArray(parts)) {
+          vTab.parts = parts;
+          if (resp.tab) {
+            vTab.currentPart = resp.tab.currentPart || vTab.currentPart;
+            vTab.totalParts = resp.tab.totalParts || vTab.totalParts;
+            if (resp.tab.outlineDetected) vTab.outlineDetected = true;
+            if (resp.tab.outlineContent) vTab.outlineContent = resp.tab.outlineContent;
+            if (resp.tab.detectedVideoNumber) vTab.detectedVideoNumber = resp.tab.detectedVideoNumber;
+          }
+          const val = validateVideoMerge(vTab);
+          vTab.mergeValidationStatus = val.valid ? 'valid' : 'invalid';
+          if (val.valid) {
+            vTab.status = 'completed';
+          } else {
+            this.recalculateTabStatus(vTab);
+          }
+          vTab.lastUpdated = Date.now();
+          updatedCount++;
+
+          // Broadcast HUD update to this tab
+          chrome.tabs.sendMessage(vTab.chromeTabId!, {
+            type: 'UPDATE_HUD',
+            tab: vTab
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.warn(`Resync error for ${vTab.id}:`, err);
+      }
+    });
+
+    await Promise.all(syncPromises);
+    await this.persist();
+    this.broadcastState();
+    this.addLog('SUCCESS', `Resynced ${updatedCount} managed tabs from live DOM.`);
+    return this.state.tabs;
   }
 
   /**

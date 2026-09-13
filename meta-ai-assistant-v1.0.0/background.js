@@ -1,48 +1,48 @@
 var F = Object.defineProperty;
 var Q = (b, t, r) => t in b ? F(b, t, { enumerable: !0, configurable: !0, writable: !0, value: r }) : b[t] = r;
 var O = (b, t, r) => Q(b, typeof t != "symbol" ? t + "" : t, r);
-const k = "MetaExtensionDB";
-const C = "assets";
-function B() {
+const V = "MetaExtensionDB";
+const v = "assets";
+function k() {
   return new Promise((b, t) => {
-    const r = indexedDB.open(k, 1);
+    const r = indexedDB.open(V, 1);
     r.onupgradeneeded = () => {
       const n = r.result;
-      n.objectStoreNames.contains(C) || n.createObjectStore(C, { keyPath: "id" });
+      n.objectStoreNames.contains(v) || n.createObjectStore(v, { keyPath: "id" });
     }, r.onsuccess = () => b(r.result), r.onerror = () => t(r.error);
   });
 }
 async function R(b) {
-  const t = await B();
+  const t = await k();
   return new Promise((r, n) => {
-    const e = t.transaction(C, "readonly").objectStore(C).get(b);
+    const e = t.transaction(v, "readonly").objectStore(v).get(b);
     e.onsuccess = () => {
-      const s = e.result;
-      if (!s) {
+      const a = e.result;
+      if (!a) {
         r(null);
         return;
       }
-      const a = new Blob([s.data], { type: s.type });
+      const s = new Blob([a.data], { type: a.type });
       r({
         asset: {
-          id: s.id,
-          name: s.name,
-          size: s.size,
-          type: s.type,
-          dataUrl: s.dataUrl,
-          textSnippet: s.textSnippet,
-          createdAt: s.createdAt
+          id: a.id,
+          name: a.name,
+          size: a.size,
+          type: a.type,
+          dataUrl: a.dataUrl,
+          textSnippet: a.textSnippet,
+          createdAt: a.createdAt
         },
-        blob: a
+        blob: s
       });
     }, e.onerror = () => n(e.error);
   });
 }
-const x = "meta_assistant_workflow_state", v = "qwen_assistant_workflow_state";
-async function V() {
+const x = "meta_assistant_workflow_state", D = "qwen_assistant_workflow_state";
+async function B() {
   return typeof chrome > "u" || !chrome.storage || !chrome.storage.local ? null : new Promise((b) => {
-    chrome.storage.local.get([x, v], (t) => {
-      b(t[x] || t[v] || null);
+    chrome.storage.local.get([x, D], (t) => {
+      b(t[x] || t[D] || null);
     });
   });
 }
@@ -169,42 +169,46 @@ function L(b, t) {
       };
   }
 }
-function D(b) {
-  const t = b.id || "V1", r = b.totalParts || 0, n = b.parts || [], c = [], d = [], e = [], s = n.filter((u) => u.status === "done" && u.content && u.content.trim().length > 0), a = /^V\d+$/i.test(t);
+function C(b) {
+  const t = b.id || "V1", r = b.totalParts || 0, n = b.parts || [], c = [], l = [], e = [], a = n.filter((d) => d.status === "done" && d.content && d.content.trim().length > 0), s = /^V\d+$/i.test(t);
   c.push({
     id: "check-vnum",
     name: "Correct Video Number",
-    passed: a,
-    detail: a ? `Video ID is verified as ${t}` : `Invalid Video ID: ${t}`
-  }), a || d.push(`Invalid video ID: "${t}". Expected format: V1, V2, etc.`);
+    passed: s,
+    detail: s ? `Video ID is verified as ${t}` : `Invalid Video ID: ${t}`
+  }), s || l.push(`Invalid video ID: "${t}". Expected format: V1, V2, etc.`);
   const i = r > 0;
   c.push({
     id: "check-total",
     name: "Total Parts Defined",
     passed: i,
     detail: i ? `Total parts detected/specified: ${r}` : "Total parts is undefined or 0"
-  }), i || d.push(`${t}: Total parts count has not been detected or set.`);
-  const o = s.map((u) => u.partNumber), l = [];
-  for (let u = 1; u <= (r || s.length); u++)
-    o.includes(u) || l.push(u);
-  const p = l.length === 0 && s.length > 0;
+  }), i || l.push(`${t}: Total parts count has not been detected or set.`);
+  const o = a.map((d) => d.partNumber), u = [];
+  if (r > 0)
+    for (let d = 1; d <= r; d++)
+      o.includes(d) || u.push(d);
+  else
+    for (let d = 1; d <= a.length; d++)
+      o.includes(d) || u.push(d);
+  const p = u.length === 0 && a.length > 0 && r > 0;
   c.push({
     id: "check-missing",
     name: "No Missing Parts",
     passed: p,
-    detail: p ? `All ${r} parts are present` : `MISSING: ${l.map((u) => `${t} P${u}`).join(", ")}`
-  }), p || d.push(`MISSING: ${l.map((u) => `${t} P${u}`).join(", ")}`);
-  const P = o.filter((u, N) => o.indexOf(u) !== N), T = Array.from(new Set(P)), I = T.length === 0;
+    detail: p ? `All ${r} parts are present` : `MISSING: ${u.map((d) => `${t} P${d}`).join(", ")}`
+  }), !p && u.length > 0 && l.push(`MISSING: ${u.map((d) => `${t} P${d}`).join(", ")}`);
+  const I = o.filter((d, N) => o.indexOf(d) !== N), g = Array.from(new Set(I)), P = g.length === 0;
   c.push({
     id: "check-duplicates",
     name: "No Duplicated Parts",
-    passed: I,
-    detail: I ? "Zero duplicate parts" : `DUPLICATE: ${T.map((u) => `${t} P${u}`).join(", ")}`
-  }), I || d.push(`DUPLICATE: ${T.map((u) => `${t} P${u}`).join(", ")}`);
-  const g = [...s].sort((u, N) => u.partNumber - N.partNumber);
+    passed: P,
+    detail: P ? "Zero duplicate parts" : `DUPLICATE: ${g.map((d) => `${t} P${d}`).join(", ")}`
+  }), P || l.push(`DUPLICATE: ${g.map((d) => `${t} P${d}`).join(", ")}`);
+  const T = [...a].sort((d, N) => d.partNumber - N.partNumber);
   let w = !0;
-  for (let u = 0; u < g.length; u++)
-    if (g[u].partNumber !== u + 1) {
+  for (let d = 0; d < T.length; d++)
+    if (T[d].partNumber !== d + 1) {
       w = !1;
       break;
     }
@@ -213,35 +217,35 @@ function D(b) {
     name: "Sequential Ordering",
     passed: w,
     detail: w ? "Strict 1..N numerical ordering confirmed" : "Parts are out of order or contain gaps"
-  }), w || d.push(`${t}: Parts sequence is non-contiguous or contains gaps.`);
-  const E = s.filter((u) => !u.heading || u.heading.trim().length === 0 || /^part\s*\d+$/i.test(u.heading.trim())), M = E.length === 0;
+  }), w || l.push(`${t}: Parts sequence is non-contiguous or contains gaps.`);
+  const E = a.filter((d) => !d.heading || d.heading.trim().length === 0 || /^part\s*\d+$/i.test(d.heading.trim())), M = E.length === 0;
   c.push({
     id: "check-headings",
     name: "Content-Based Headings",
     passed: M,
     detail: M ? "All parts have meaningful headings" : `${E.length} part(s) using generic or empty heading`
-  }), M || e.push(`${t}: Parts ${E.map((u) => `P${u.partNumber}`).join(", ")} will be assigned intelligent content-based headings upon export.`);
-  const y = s.filter((u) => !u.content || u.content.trim().length < 25), $ = y.length === 0;
+  }), M || e.push(`${t}: Parts ${E.map((d) => `P${d.partNumber}`).join(", ")} will be assigned intelligent content-based headings upon export.`);
+  const y = a.filter((d) => !d.content || d.content.trim().length < 25), $ = y.length === 0;
   c.push({
     id: "check-content",
     name: "Complete Script Content",
     passed: $,
     detail: $ ? "All parts contain complete script prose" : `${y.length} part(s) contain empty or partial content`
-  }), $ || d.push(`${t}: Part(s) ${y.map((u) => `P${u.partNumber}`).join(", ")} have incomplete script content.`);
-  const h = s.some((u) => {
-    const N = u.partNumber === 1, U = /^(?:#+\s*)?(?:video\s+|script\s+)?outline\b/i.test(u.content.trim());
-    return N && U && u.content.trim().length < 400;
+  }), $ || l.push(`${t}: Part(s) ${y.map((d) => `P${d.partNumber}`).join(", ")} have incomplete script content.`);
+  const h = a.some((d) => {
+    const N = d.partNumber === 1, U = /^(?:#+\s*)?(?:video\s+|script\s+)?outline\b/i.test(d.content.trim());
+    return N && U && d.content.trim().length < 400;
   });
   c.push({
     id: "check-no-outline",
     name: "Outline Isolated",
     passed: !h,
     detail: h ? "Part 1 appears to contain an outline instead of script prose" : "No outline is treated as a script part"
-  }), h && d.push(`${t}: Part 1 appears to contain the Outline rather than actual script text. Wait for Part 1 generation.`);
-  const m = parseInt(t.replace(/\D/g, ""), 10) || 1, S = s.filter((u) => {
-    if (u.videoNumber && u.videoNumber !== m) return !0;
-    if (u.explicitMarker) {
-      const N = u.explicitMarker.match(/V(\d+)/i);
+  }), h && l.push(`${t}: Part 1 appears to contain the Outline rather than actual script text. Wait for Part 1 generation.`);
+  const m = parseInt(t.replace(/\D/g, ""), 10) || 1, S = a.filter((d) => {
+    if (d.videoNumber && d.videoNumber !== m) return !0;
+    if (d.explicitMarker) {
+      const N = d.explicitMarker.match(/V(\d+)/i);
       if (N && parseInt(N[1], 10) !== m) return !0;
     }
     return !1;
@@ -250,16 +254,18 @@ function D(b) {
     id: "check-cross-video",
     name: "Strict Video Isolation",
     passed: f,
-    detail: f ? `All parts strictly isolated to ${t}` : `Cross-video parts detected: ${S.map((u) => u.explicitMarker || `P${u.partNumber}`).join(", ")}`
-  }), f || d.push(`${t}: Foreign video parts detected: ${S.map((u) => u.explicitMarker || `P${u.partNumber}`).join(", ")}. Different videos must never be merged.`);
-  const A = d.length === 0 && s.length > 0 && (r > 0 ? s.length >= r : !0), _ = A ? "TXT MERGE VERIFIED ✓" : d.length === 0 ? "IN PROGRESS ⏳" : "MERGE VALIDATION FAILED ✕";
+    detail: f ? `All parts strictly isolated to ${t}` : `Cross-video parts detected: ${S.map((d) => d.explicitMarker || `P${d.partNumber}`).join(", ")}`
+  }), f || l.push(`${t}: Foreign video parts detected: ${S.map((d) => d.explicitMarker || `P${d.partNumber}`).join(", ")}. Different videos must never be merged.`);
+  const A = r > 0 && a.length === r && u.length === 0 && l.length === 0, _ = A ? "TXT MERGE VERIFIED ✓" : l.length === 0 ? "IN PROGRESS ⏳" : "MERGE VALIDATION FAILED ✕";
   return {
     valid: A,
     videoNumber: t,
     totalParts: r,
-    completedPartsCount: s.length,
+    completedPartsCount: a.length,
+    missingParts: u,
+    duplicateParts: g,
     checks: c,
-    errors: d,
+    errors: l,
     warnings: e,
     statusLabel: _
   };
@@ -303,29 +309,29 @@ class G {
     });
   }
   async init() {
-    const t = await V();
+    const t = await B();
     t && (this.state = t, this.addLog("INFO", "Restored previous workflow state from storage.")), chrome.sidePanel && chrome.sidePanel.setPanelBehavior && chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: !1 }).catch(() => {
     }), await this.reconcileAndInjectTabs();
   }
   async handleMessage(t, r) {
-    var n, c, d;
+    var n, c, l;
     switch (t.type) {
       case "GET_STATE":
         return { success: !0, state: this.state };
       case "SET_STATE":
         return this.state = { ...this.state, ...t.state }, await this.persist(), { success: !0, state: this.state };
       case "THUMBNAIL_UPLOAD_STARTED": {
-        const e = this.state.tabs.find((s) => s.id === t.vNumber);
+        const e = this.state.tabs.find((a) => a.id === t.vNumber);
         return e && (e.thumbnailUploading = !0, this.persist()), { success: !0 };
       }
       case "THUMBNAIL_UPLOAD_COMPLETE": {
-        const e = this.state.tabs.find((s) => s.id === t.vNumber);
+        const e = this.state.tabs.find((a) => a.id === t.vNumber);
         return e && (e.thumbnailUploading = !1, e.thumbnailPasted = !0, this.recalculateTabStatus(e), this.persist()), { success: !0 };
       }
       case "GET_ACTIVE_META_TAB":
       case "GET_ACTIVE_QWEN_TAB": {
-        const s = (await chrome.tabs.query({ active: !0, currentWindow: !0 }))[0], a = (s == null ? void 0 : s.url) && this.isMetaUrl(s.url);
-        return { success: !0, tab: s, isQwen: a, isMeta: a };
+        const a = (await chrome.tabs.query({ active: !0, currentWindow: !0 }))[0], s = (a == null ? void 0 : a.url) && this.isMetaUrl(a.url);
+        return { success: !0, tab: a, isQwen: s, isMeta: s };
       }
       case "DUPLICATE_CHATS":
         return await this.duplicateChats(
@@ -338,35 +344,35 @@ class G {
       case "UPDATE_CONFIG":
         return this.state.config = { ...this.state.config, ...t.config }, await this.persist(), { success: !0, config: this.state.config };
       case "SELECT_TABS": {
-        const { tabIds: e, selected: s } = t;
-        return this.state.tabs.forEach((a) => {
-          e.includes(a.id) && (a.selected = s);
+        const { tabIds: e, selected: a } = t;
+        return this.state.tabs.forEach((s) => {
+          e.includes(s.id) && (s.selected = a);
         }), await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "SELECT_RANGE": {
-        const { startIndex: e, endIndex: s } = t;
-        return this.state.tabs.forEach((a, i) => {
+        const { startIndex: e, endIndex: a } = t;
+        return this.state.tabs.forEach((s, i) => {
           const o = i + 1;
-          a.selected = a.index >= e && a.index <= s || o >= e && o <= s;
+          s.selected = s.index >= e && s.index <= a || o >= e && o <= a;
         }), await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "ASSIGN_TITLES":
         return await this.assignTitles(t.titles, t.startIndex, t.endIndex);
       case "SET_MASTER_PROMPT": {
-        const { prompt: e, target: s } = t;
-        return this.state.config.masterPrompt = e, this.state.tabs.forEach((a) => {
-          (s === "all" || a.selected) && (a.masterPrompt = e, this.recalculateTabStatus(a));
-        }), this.addLog("SUCCESS", `Master prompt applied to ${s === "all" ? "all" : "selected"} tabs.`), await this.persist(), { success: !0, tabs: this.state.tabs };
+        const { prompt: e, target: a } = t;
+        return this.state.config.masterPrompt = e, this.state.tabs.forEach((s) => {
+          (a === "all" || s.selected) && (s.masterPrompt = e, this.recalculateTabStatus(s));
+        }), this.addLog("SUCCESS", `Master prompt applied to ${a === "all" ? "all" : "selected"} tabs.`), await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "ASSIGN_THUMBNAILS":
         return t.assets.forEach((e) => {
-          const s = this.state.tabs.find((a) => a.id === e.vNumber);
-          s && (s.thumbnailId = e.assetId, s.thumbnailName = e.name, s.thumbnailStatus = "assigned", this.recalculateTabStatus(s));
+          const a = this.state.tabs.find((s) => s.id === e.vNumber);
+          a && (a.thumbnailId = e.assetId, a.thumbnailName = e.name, a.thumbnailStatus = "assigned", this.recalculateTabStatus(a));
         }), this.addLog("SUCCESS", `Thumbnails mapped to ${t.assets.length} tabs.`), await this.persist(), { success: !0, tabs: this.state.tabs };
       case "ASSIGN_SCRIPTS":
         return t.assets.forEach((e) => {
-          const s = this.state.tabs.find((a) => a.id === e.vNumber);
-          s && (s.scriptId = e.assetId, s.scriptName = e.name, s.scriptStatus = "assigned", this.recalculateTabStatus(s));
+          const a = this.state.tabs.find((s) => s.id === e.vNumber);
+          a && (a.scriptId = e.assetId, a.scriptName = e.name, a.scriptStatus = "assigned", this.recalculateTabStatus(a));
         }), this.addLog("SUCCESS", `Scripts mapped to ${t.assets.length} tabs.`), await this.persist(), { success: !0, tabs: this.state.tabs };
       case "RUN_EXECUTION":
         return await this.startExecution(t.target);
@@ -388,8 +394,8 @@ class G {
         return this.state.downloadManagerLoaded = !1, await this.persist(), { success: !0 };
       case "SET_SCRIPT_MODE": {
         const e = t.mode === "competitor" ? "competitor" : "original";
-        return this.state.config.scriptMode = e, this.state.config.competitorScriptEnabled = e === "competitor", this.state.tabs.forEach((s) => {
-          s.scriptMode = e, s.scriptOptional = e === "original", this.recalculateTabStatus(s);
+        return this.state.config.scriptMode = e, this.state.config.competitorScriptEnabled = e === "competitor", this.state.tabs.forEach((a) => {
+          a.scriptMode = e, a.scriptOptional = e === "original", this.recalculateTabStatus(a);
         }), this.addLog(
           "INFO",
           `Script Mode set to ${e === "original" ? "Original Script Mode" : "Competitor Script Mode"}.`
@@ -404,84 +410,90 @@ class G {
         ), await this.persist(), { success: !0, config: this.state.config };
       case "SET_PART_WORD_COUNT": {
         const e = typeof t.wordCount == "number" && t.wordCount > 0 ? t.wordCount : 4e3;
-        return this.state.config.partWordCount = e, this.state.tabs.forEach((s) => {
-          s.partWordCount = e;
+        return this.state.config.partWordCount = e, this.state.tabs.forEach((a) => {
+          a.partWordCount = e;
         }), this.addLog("INFO", `Part Word Count updated to ${e} words.`), await this.persist(), { success: !0, partWordCount: e };
       }
       case "SET_SCRIPT_OPTIONAL": {
-        const e = this.state.tabs.find((s) => s.id === t.vNumber);
+        const e = this.state.tabs.find((a) => a.id === t.vNumber);
         return e && (e.scriptOptional = t.optional, await this.persist()), { success: !0 };
       }
       case "INSERT_NEXT_PART":
         return await this.insertNextPart(t.vNumber, t.partNumber);
       case "CANCEL_TAB": {
         const e = t.vNumber;
-        this.executionQueue = this.executionQueue.filter((a) => a !== e);
-        const s = this.state.tabs.find((a) => a.id === e);
-        return s && (s.status = "ready", this.addLog("WARNING", `Execution cancelled for ${e}.`, e), await this.persist()), { success: !0 };
+        this.executionQueue = this.executionQueue.filter((s) => s !== e);
+        const a = this.state.tabs.find((s) => s.id === e);
+        return a && (a.status = "ready", this.addLog("WARNING", `Execution cancelled for ${e}.`, e), await this.persist()), { success: !0 };
       }
       case "RESTART_TAB": {
-        const e = t.vNumber, s = this.state.tabs.find((a) => a.id === e);
-        return s && (s.status = "ready", s.parts = [], s.totalParts = 0, s.currentPart = 1, s.error = null, this.recalculateTabStatus(s), this.executionQueue.includes(e) || this.executionQueue.push(e), this.addLog("INFO", `Restarted ${e} from beginning. Queued for execution.`, e), this.processQueue(), await this.persist()), { success: !0 };
+        const e = t.vNumber, a = this.state.tabs.find((s) => s.id === e);
+        return a && (a.status = "ready", a.parts = [], a.totalParts = 0, a.currentPart = 1, a.error = null, this.recalculateTabStatus(a), this.executionQueue.includes(e) || this.executionQueue.push(e), this.addLog("INFO", `Restarted ${e} from beginning. Queued for execution.`, e), this.processQueue(), await this.persist()), { success: !0 };
       }
       case "REFRESH_TAB": {
-        const e = t.vNumber, s = this.state.tabs.find((a) => a.id === e);
-        return s && s.chromeTabId && (await new Promise((i) => {
-          chrome.tabs.sendMessage(s.chromeTabId, { type: "PING" }, (o) => {
+        const e = t.vNumber, a = this.state.tabs.find((s) => s.id === e);
+        return a && a.chromeTabId && (await new Promise((i) => {
+          chrome.tabs.sendMessage(a.chromeTabId, { type: "PING" }, (o) => {
             i(!chrome.runtime.lastError && o && o.pong);
           }), setTimeout(() => i(!1), 200);
-        }) ? chrome.tabs.sendMessage(s.chromeTabId, { type: "SCAN_DOM_NOW", tab: s }).catch(() => {
+        }) ? chrome.tabs.sendMessage(a.chromeTabId, { type: "SCAN_DOM_NOW", tab: a }).catch(() => {
         }) : (await chrome.scripting.executeScript({
-          target: { tabId: s.chromeTabId },
+          target: { tabId: a.chromeTabId },
           files: ["content.js"]
         }).catch(() => {
         }), await chrome.scripting.insertCSS({
-          target: { tabId: s.chromeTabId },
+          target: { tabId: a.chromeTabId },
           files: ["floatingPanel.css"]
         }).catch(() => {
         })), this.addLog("INFO", `Re-synced state for ${e} in-place (no page reload).`, e)), { success: !0 };
       }
       case "REFRESH_ALL_TABS": {
         const e = await this.reconcileAndInjectTabs();
+        for (const a of this.state.tabs)
+          a.chromeTabId && chrome.tabs.sendMessage(a.chromeTabId, { type: "SCAN_DOM_NOW", tab: a }).catch(() => {
+          });
         return this.addLog("INFO", `Re-synced and verified ${e.length} managed Meta.ai tabs in-place.`), { success: !0, tabs: e };
       }
       case "RESYNC_ALL_TABS": {
-        for (const e of this.state.tabs)
+        for (const e of this.state.tabs) {
           e.chromeTabId && chrome.tabs.sendMessage(e.chromeTabId, { type: "SCAN_DOM_NOW", tab: e }).catch(() => {
           });
+          const a = C(e);
+          e.mergeValidationStatus = a.valid ? "valid" : "invalid", a.valid && (e.status = "completed");
+        }
         return this.addLog("INFO", `Global Re-sync: Requested live DOM scan across all ${this.state.tabs.length} managed tabs.`), await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "REMOVE_TAB": {
         const e = t.vNumber;
-        return this.executionQueue = this.executionQueue.filter((s) => s !== e), this.state.tabs = this.state.tabs.filter((s) => s.id !== e), this.reindexTabs(), this.addLog("INFO", `Removed ${e} from dashboard. Reindexed remaining tabs to V1..V${this.state.tabs.length}.`), await this.persist(), { success: !0, tabs: this.state.tabs };
+        return this.executionQueue = this.executionQueue.filter((a) => a !== e), this.state.tabs = this.state.tabs.filter((a) => a.id !== e), this.reindexTabs(), this.addLog("INFO", `Removed ${e} from dashboard. Reindexed remaining tabs to V1..V${this.state.tabs.length}.`), await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "CLEAR_COMPLETED_TABS": {
         const e = this.state.tabs.length;
-        return this.state.tabs = this.state.tabs.filter((s) => s.status !== "completed"), this.reindexTabs(), this.addLog("INFO", `Cleared ${e - this.state.tabs.length} completed tabs. Reindexed remaining to V1..V${this.state.tabs.length}.`), await this.persist(), { success: !0, tabs: this.state.tabs };
+        return this.state.tabs = this.state.tabs.filter((a) => a.status !== "completed"), this.reindexTabs(), this.addLog("INFO", `Cleared ${e - this.state.tabs.length} completed tabs. Reindexed remaining to V1..V${this.state.tabs.length}.`), await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "CLEAR_CLOSED_TABS": {
-        const e = await chrome.tabs.query({}), s = new Set(e.map((i) => i.id)), a = this.state.tabs.length;
-        return this.state.tabs = this.state.tabs.filter((i) => i.chromeTabId && s.has(i.chromeTabId)), this.reindexTabs(), this.addLog("INFO", `Cleared ${a - this.state.tabs.length} closed tabs. Reindexed remaining to V1..V${this.state.tabs.length}.`), await this.persist(), { success: !0, tabs: this.state.tabs };
+        const e = await chrome.tabs.query({}), a = new Set(e.map((i) => i.id)), s = this.state.tabs.length;
+        return this.state.tabs = this.state.tabs.filter((i) => i.chromeTabId && a.has(i.chromeTabId)), this.reindexTabs(), this.addLog("INFO", `Cleared ${s - this.state.tabs.length} closed tabs. Reindexed remaining to V1..V${this.state.tabs.length}.`), await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "REINDEX_TABS":
         return this.reindexTabs(), this.addLog("INFO", `Renumbered all tabs sequentially (V1..V${this.state.tabs.length}).`), await this.persist(), { success: !0, tabs: this.state.tabs };
       case "BATCH_TAB_ACTION": {
-        const { action: e, tabIds: s } = t, a = this.state.tabs.filter((i) => s.includes(i.id));
+        const { action: e, tabIds: a } = t, s = this.state.tabs.filter((i) => a.includes(i.id));
         if (e === "restart") {
-          for (const i of a)
+          for (const i of s)
             i.status = "ready", i.parts = [], i.totalParts = 0, i.currentPart = 1, i.error = null, this.recalculateTabStatus(i), this.executionQueue.includes(i.id) || this.executionQueue.push(i.id);
-          this.addLog("INFO", `Restarted ${a.length} selected tabs from Part 1.`), this.processQueue();
+          this.addLog("INFO", `Restarted ${s.length} selected tabs from Part 1.`), this.processQueue();
         } else if (e === "retry") {
-          const i = a.filter((o) => o.status === "error" || o.status === "incomplete");
+          const i = s.filter((o) => o.status === "error" || o.status === "incomplete");
           for (const o of i)
             o.error = null, this.recalculateTabStatus(o), this.executionQueue.includes(o.id) || this.executionQueue.push(o.id);
           this.addLog("INFO", `Retried ${i.length} selected tabs.`), this.processQueue();
         } else if (e === "refresh") {
-          for (const i of a)
-            i.chromeTabId && (await new Promise((l) => {
+          for (const i of s)
+            i.chromeTabId && (await new Promise((u) => {
               chrome.tabs.sendMessage(i.chromeTabId, { type: "PING" }, (p) => {
-                l(!chrome.runtime.lastError && p && p.pong);
-              }), setTimeout(() => l(!1), 200);
+                u(!chrome.runtime.lastError && p && p.pong);
+              }), setTimeout(() => u(!1), 200);
             }) ? chrome.tabs.sendMessage(i.chromeTabId, { type: "SCAN_DOM_NOW", tab: i }).catch(() => {
             }) : (await chrome.scripting.executeScript({
               target: { tabId: i.chromeTabId },
@@ -492,20 +504,20 @@ class G {
               files: ["floatingPanel.css"]
             }).catch(() => {
             })));
-          this.addLog("INFO", `Re-synced state in-place for ${a.length} selected tabs.`);
+          this.addLog("INFO", `Re-synced state in-place for ${s.length} selected tabs.`);
         } else if (e === "cancel") {
-          this.executionQueue = this.executionQueue.filter((i) => !s.includes(i));
-          for (const i of a)
+          this.executionQueue = this.executionQueue.filter((i) => !a.includes(i));
+          for (const i of s)
             i.status === "running" && (i.status = "ready");
-          this.addLog("WARNING", `Cancelled execution for ${a.length} selected tabs.`);
-        } else e === "remove" && (this.executionQueue = this.executionQueue.filter((i) => !s.includes(i)), this.state.tabs = this.state.tabs.filter((i) => !s.includes(i.id)), this.reindexTabs(), this.addLog("INFO", `Removed ${a.length} selected tabs. Reindexed remaining tabs to V1..V${this.state.tabs.length}.`));
+          this.addLog("WARNING", `Cancelled execution for ${s.length} selected tabs.`);
+        } else e === "remove" && (this.executionQueue = this.executionQueue.filter((i) => !a.includes(i)), this.state.tabs = this.state.tabs.filter((i) => !a.includes(i.id)), this.reindexTabs(), this.addLog("INFO", `Removed ${s.length} selected tabs. Reindexed remaining tabs to V1..V${this.state.tabs.length}.`));
         return await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "PUSH_TITLES_TO_CHATS":
       case "STAGE_PASTE_PROMPTS": {
-        const e = t.target || "all", s = this.getTargetTabs(e);
-        let a = 0;
-        for (const i of s)
+        const e = t.target || "all", a = this.getTargetTabs(e);
+        let s = 0;
+        for (const i of a)
           i.chromeTabId && (i.titleInjected = !!i.title, i.promptInjected = !!(i.masterPrompt || this.state.config.masterPrompt), this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, {
             type: "PASTE_PROMPT_ONLY",
             title: i.title,
@@ -513,13 +525,13 @@ class G {
             vNumber: i.id
           }).catch(() => {
           }), chrome.tabs.sendMessage(i.chromeTabId, { type: "UPDATE_HUD", tab: i }).catch(() => {
-          }), a++);
-        return this.addLog("INFO", `Stage 1 / Push Titles: Injected into ${a} Qwen chat inputs (${e}).`), await this.persist(), { success: !0, count: a, tabs: this.state.tabs };
+          }), s++);
+        return this.addLog("INFO", `Stage 1 / Push Titles: Injected into ${s} Qwen chat inputs (${e}).`), await this.persist(), { success: !0, count: s, tabs: this.state.tabs };
       }
       case "PUSH_PROMPT_TO_CHATS": {
-        const e = t.target || "all", s = this.getTargetTabs(e);
-        let a = 0;
-        for (const i of s)
+        const e = t.target || "all", a = this.getTargetTabs(e);
+        let s = 0;
+        for (const i of a)
           i.chromeTabId && (i.promptInjected = !0, this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, {
             type: "PASTE_PROMPT_ONLY",
             title: i.title,
@@ -527,61 +539,61 @@ class G {
             vNumber: i.id
           }).catch(() => {
           }), chrome.tabs.sendMessage(i.chromeTabId, { type: "UPDATE_HUD", tab: i }).catch(() => {
-          }), a++);
-        return this.addLog("INFO", `Push Prompt: Injected master prompt into ${a} Qwen chats (${e}).`), await this.persist(), { success: !0, count: a, tabs: this.state.tabs };
+          }), s++);
+        return this.addLog("INFO", `Push Prompt: Injected master prompt into ${s} Qwen chats (${e}).`), await this.persist(), { success: !0, count: s, tabs: this.state.tabs };
       }
       case "PUSH_THUMBNAILS_TO_CHATS":
       case "STAGE_PASTE_THUMBNAILS": {
-        const e = t.target || "all", s = this.getTargetTabs(e);
-        let a = 0;
-        for (const i of s)
+        const e = t.target || "all", a = this.getTargetTabs(e);
+        let s = 0;
+        for (const i of a)
           if (i.chromeTabId && i.thumbnailId) {
             const o = await R(i.thumbnailId);
             if (o) {
-              const l = await this.blobToBase64(o.blob);
+              const u = await this.blobToBase64(o.blob);
               i.thumbnailPasted = !0, this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, {
                 type: "PASTE_THUMBNAIL_ONLY",
                 thumbnail: {
                   name: o.asset.name || `${i.id}_thumb`,
                   type: o.asset.type,
-                  base64: l
+                  base64: u
                 },
                 vNumber: i.id
               }).catch(() => {
               }), chrome.tabs.sendMessage(i.chromeTabId, { type: "UPDATE_HUD", tab: i }).catch(() => {
-              }), a++;
+              }), s++;
             }
           }
-        return this.addLog("INFO", `Stage 2 / Push Thumbnails: Dispatched clipboard paste to ${a} Qwen chats (${e}).`), await this.persist(), { success: !0, count: a, tabs: this.state.tabs };
+        return this.addLog("INFO", `Stage 2 / Push Thumbnails: Dispatched clipboard paste to ${s} Qwen chats (${e}).`), await this.persist(), { success: !0, count: s, tabs: this.state.tabs };
       }
       case "PUSH_SCRIPTS_TO_CHATS":
       case "STAGE_PASTE_SCRIPTS": {
-        const e = t.target || "all", s = this.getTargetTabs(e);
-        let a = 0;
-        for (const i of s) {
+        const e = t.target || "all", a = this.getTargetTabs(e);
+        let s = 0;
+        for (const i of a) {
           if (!i.chromeTabId) continue;
-          let o = "", l = `${i.id}_script.txt`;
+          let o = "", u = `${i.id}_script.txt`;
           if (i.scriptId) {
             const p = await R(i.scriptId);
-            p && (o = await p.blob.text(), l = p.asset.name || l);
-          } else this.state.config.competitorScriptEnabled && ((n = this.state.config.competitorScriptText) != null && n.trim()) && (o = this.state.config.competitorScriptText.trim(), l = `${i.id}_Competitor_Script.txt`);
+            p && (o = await p.blob.text(), u = p.asset.name || u);
+          } else this.state.config.competitorScriptEnabled && ((n = this.state.config.competitorScriptText) != null && n.trim()) && (o = this.state.config.competitorScriptText.trim(), u = `${i.id}_Competitor_Script.txt`);
           o && (i.scriptInjected = !0, this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, {
             type: "PASTE_SCRIPT_ONLY",
             script: {
-              name: l,
+              name: u,
               content: o
             },
             vNumber: i.id
           }).catch(() => {
           }), chrome.tabs.sendMessage(i.chromeTabId, { type: "UPDATE_HUD", tab: i }).catch(() => {
-          }), a++);
+          }), s++);
         }
-        return this.addLog("INFO", `Stage 3 / Push Scripts: Embedded competitor scripts into ${a} Qwen chats (${e}).`), await this.persist(), { success: !0, count: a, tabs: this.state.tabs };
+        return this.addLog("INFO", `Stage 3 / Push Scripts: Embedded competitor scripts into ${s} Qwen chats (${e}).`), await this.persist(), { success: !0, count: s, tabs: this.state.tabs };
       }
       case "PUSH_ALL_ASSETS_TO_CHATS": {
-        const e = t.target || "all", s = this.getTargetTabs(e);
-        let a = 0;
-        for (const i of s)
+        const e = t.target || "all", a = this.getTargetTabs(e);
+        let s = 0;
+        for (const i of a)
           if (i.chromeTabId) {
             if (i.titleInjected = !!i.title, i.promptInjected = !!(i.masterPrompt || this.state.config.masterPrompt), chrome.tabs.sendMessage(i.chromeTabId, {
               type: "PASTE_PROMPT_ONLY",
@@ -592,13 +604,13 @@ class G {
             }), i.thumbnailId) {
               const o = await R(i.thumbnailId);
               if (o) {
-                const l = await this.blobToBase64(o.blob);
+                const u = await this.blobToBase64(o.blob);
                 i.thumbnailPasted = !0, chrome.tabs.sendMessage(i.chromeTabId, {
                   type: "PASTE_THUMBNAIL_ONLY",
                   thumbnail: {
                     name: o.asset.name || `${i.id}_thumb`,
                     type: o.asset.type,
-                    base64: l
+                    base64: u
                   },
                   vNumber: i.id
                 }).catch(() => {
@@ -608,12 +620,12 @@ class G {
             if (i.scriptId) {
               const o = await R(i.scriptId);
               if (o) {
-                const l = await o.blob.text();
+                const u = await o.blob.text();
                 i.scriptInjected = !0, chrome.tabs.sendMessage(i.chromeTabId, {
                   type: "PASTE_SCRIPT_ONLY",
                   script: {
                     name: o.asset.name || `${i.id}_script.txt`,
-                    content: l
+                    content: u
                   },
                   vNumber: i.id
                 }).catch(() => {
@@ -621,9 +633,9 @@ class G {
               }
             }
             this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, { type: "UPDATE_HUD", tab: i }).catch(() => {
-            }), a++;
+            }), s++;
           }
-        return this.addLog("INFO", `All Pushing: Pushed all 4 assets into ${a} Qwen chats (${e}).`), await this.persist(), { success: !0, count: a, tabs: this.state.tabs };
+        return this.addLog("INFO", `All Pushing: Pushed all 4 assets into ${s} Qwen chats (${e}).`), await this.persist(), { success: !0, count: s, tabs: this.state.tabs };
       }
       case "STAGE_RUN_ALL_PACED": {
         const e = t.target || "all";
@@ -654,13 +666,13 @@ class G {
       case "CONTENT_TAB_READY": {
         const e = (c = r.tab) == null ? void 0 : c.id;
         if (e) {
-          let s;
+          let a;
           if (t.detectedVideoNumber) {
-            const a = `V${t.detectedVideoNumber}`;
+            const s = `V${t.detectedVideoNumber}`;
             return this.state.tabs.forEach((i) => {
-              i.chromeTabId === e && i.id !== a && (i.chromeTabId = null);
-            }), s = this.state.tabs.find((i) => i.id === a), s || (s = {
-              id: a,
+              i.chromeTabId === e && i.id !== s && (i.chromeTabId = null);
+            }), a = this.state.tabs.find((i) => i.id === s), a || (a = {
+              id: s,
               index: t.detectedVideoNumber,
               title: "",
               masterPrompt: this.state.config.masterPrompt || "",
@@ -677,13 +689,13 @@ class G {
               scriptMode: this.state.config.scriptMode || "original",
               scriptOptional: (this.state.config.scriptMode || "original") === "original" || !this.state.config.competitorScriptEnabled,
               lastUpdated: Date.now()
-            }, this.state.tabs.push(s)), s.chromeTabId = e, this.addLog("INFO", `Linked ${s.id} to browser tab ${e} via explicit marker`, s.id), await this.persist(), { success: !0, tab: s };
+            }, this.state.tabs.push(a)), a.chromeTabId = e, this.addLog("INFO", `Linked ${a.id} to browser tab ${e} via explicit marker`, a.id), await this.persist(), { success: !0, tab: a };
           }
-          if (s = this.state.tabs.find((a) => a.chromeTabId === e), !s) {
-            const a = await chrome.tabs.query({}), i = new Set(a.map((o) => o.id));
+          if (a = this.state.tabs.find((s) => s.chromeTabId === e), !a) {
+            const s = await chrome.tabs.query({}), i = new Set(s.map((o) => o.id));
             this.state.tabs.forEach((o) => {
               o.chromeTabId && !i.has(o.chromeTabId) && (o.chromeTabId = null);
-            }), s = this.state.tabs.find((o) => !o.chromeTabId), s ? (s.chromeTabId = e, this.addLog("INFO", `Linked ${s.id} to browser tab ${e}`, s.id), await this.persist()) : this.state.tabs.length === 0 && (s = {
+            }), a = this.state.tabs.find((o) => !o.chromeTabId), a ? (a.chromeTabId = e, this.addLog("INFO", `Linked ${a.id} to browser tab ${e}`, a.id), await this.persist()) : this.state.tabs.length === 0 && (a = {
               id: "V1",
               index: 1,
               title: "",
@@ -701,24 +713,24 @@ class G {
               scriptMode: this.state.config.scriptMode || "original",
               scriptOptional: (this.state.config.scriptMode || "original") === "original" || !this.state.config.competitorScriptEnabled,
               lastUpdated: Date.now()
-            }, this.state.tabs.push(s), this.addLog("INFO", `Auto-registered V1 for browser tab ${e}`, "V1"), await this.persist());
+            }, this.state.tabs.push(a), this.addLog("INFO", `Auto-registered V1 for browser tab ${e}`, "V1"), await this.persist());
           }
-          if (s)
-            return { success: !0, tab: s };
+          if (a)
+            return { success: !0, tab: a };
         }
         return { success: !0, tab: null };
       }
       case "REASSIGN_TAB_VNUMBER": {
-        const e = (d = r.tab) == null ? void 0 : d.id, s = t.toVideoNumber || parseInt((t.toVNumber || "").replace(/\D/g, ""), 10);
-        if (s && e) {
-          const a = `V${s}`;
+        const e = (l = r.tab) == null ? void 0 : l.id, a = t.toVideoNumber || parseInt((t.toVNumber || "").replace(/\D/g, ""), 10);
+        if (a && e) {
+          const s = `V${a}`;
           this.state.tabs.forEach((o) => {
-            o.chromeTabId === e && o.id !== a && (o.chromeTabId = null);
+            o.chromeTabId === e && o.id !== s && (o.chromeTabId = null);
           });
-          let i = this.state.tabs.find((o) => o.id === a);
+          let i = this.state.tabs.find((o) => o.id === s);
           return i || (i = {
-            id: a,
-            index: s,
+            id: s,
+            index: a,
             title: "",
             masterPrompt: this.state.config.masterPrompt || "",
             qwenUrl: "https://chat.qwen.ai",
@@ -739,7 +751,7 @@ class G {
         return { success: !1 };
       }
       case "CONTENT_OUTLINE_DETECTED": {
-        const e = this.state.tabs.find((s) => s.id === t.vNumber);
+        const e = this.state.tabs.find((a) => a.id === t.vNumber);
         return e && (e.outlineDetected = !0, t.outlineContent && (e.outlineContent = t.outlineContent), t.outlineStatus && (e.outlineStatus = t.outlineStatus), t.outlinePartInstructions && (e.outlinePartInstructions = t.outlinePartInstructions), t.lifecycleStage && (e.lifecycleStage = t.lifecycleStage), t.liveDebugStatus && (e.liveDebugStatus = t.liveDebugStatus), !e.manualOverride && t.totalParts && (e.totalParts = t.totalParts), this.addLog(
           "INFO",
           `${e.id}: [OUTLINE] Outline detected (${e.totalParts} total parts planned). Outline status: ${e.outlineStatus || "completed"}.`,
@@ -747,27 +759,27 @@ class G {
         ), await this.persist()), { success: !0 };
       }
       case "OVERRIDE_TAB_PARTS": {
-        const e = this.state.tabs.find((s) => s.id === t.vNumber);
+        const e = this.state.tabs.find((a) => a.id === t.vNumber);
         if (e) {
           t.totalParts && (e.totalParts = t.totalParts), t.currentPart && (e.currentPart = t.currentPart), typeof t.outlineDetected == "boolean" && (e.outlineDetected = t.outlineDetected), e.manualOverride = !0, e.parts || (e.parts = []);
-          for (let a = 1; a <= e.totalParts; a++)
-            if (!e.parts.some((i) => i.partNumber === a)) {
+          for (let s = 1; s <= e.totalParts; s++)
+            if (!e.parts.some((i) => i.partNumber === s)) {
               const i = parseInt(e.id.replace(/\D/g, ""), 10) || 1;
               e.parts.push({
-                partNumber: a,
-                label: `${e.id} P${a}`,
-                explicitMarker: `${e.id} P${a}`,
+                partNumber: s,
+                label: `${e.id} P${s}`,
+                explicitMarker: `${e.id} P${s}`,
                 videoNumber: i,
-                status: a < e.currentPart ? "done" : a === e.currentPart ? "ready" : "waiting",
+                status: s < e.currentPart ? "done" : s === e.currentPart ? "ready" : "waiting",
                 content: "",
                 downloaded: !1
               });
             }
           e.parts = e.parts.filter(
-            (a) => a.partNumber <= e.totalParts || a.status === "done" && a.content && a.content.trim()
-          ), e.parts.sort((a, i) => a.partNumber - i.partNumber);
-          const s = D(e);
-          e.mergeValidationStatus = s.valid ? "valid" : "invalid", this.addLog(
+            (s) => s.partNumber <= e.totalParts || s.status === "done" && s.content && s.content.trim()
+          ), e.parts.sort((s, i) => s.partNumber - i.partNumber);
+          const a = C(e);
+          e.mergeValidationStatus = a.valid ? "valid" : "invalid", this.addLog(
             "INFO",
             `[MANUAL] ${e.id}: Manual override applied. Total Parts = ${e.totalParts}, Current Part = ${e.currentPart}, Outline = ${e.outlineDetected ? "Generated ✓" : "None"}.`,
             e.id
@@ -776,21 +788,23 @@ class G {
         return { success: !0 };
       }
       case "CONTENT_PART_DETECTED": {
-        const e = this.state.tabs.find((s) => s.id === t.vNumber);
+        const e = this.state.tabs.find((a) => a.id === t.vNumber);
         if (e) {
           !e.manualOverride && t.totalParts && t.totalParts > 0 && (e.totalParts = t.totalParts, e.parts && e.parts.length > 0 && (e.parts = e.parts.filter(
             (s) => s.partNumber <= e.totalParts || s.status === "done" && s.content && s.content.trim()
           ))), e.parts || (e.parts = []), t.missingParts && (e.missingParts = t.missingParts), t.duplicateParts && (e.duplicateParts = t.duplicateParts), t.detectedVideoNumber && (e.detectedVideoNumber = t.detectedVideoNumber), t.lifecycleStage && (e.lifecycleStage = t.lifecycleStage), t.liveDebugStatus && (e.liveDebugStatus = t.liveDebugStatus);
           for (const s of t.parts || []) {
-            const a = e.parts.find((i) => i.partNumber === s.partNumber);
-            a ? (s.content && s.content.trim() && (a.content = s.content), s.heading && (a.heading = s.heading), s.explicitMarker && (a.explicitMarker = s.explicitMarker), s.videoNumber && (a.videoNumber = s.videoNumber), a.status = s.status) : e.parts.push({ ...s });
+            const i = e.parts.find((o) => o.partNumber === s.partNumber);
+            i ? (s.content && s.content.trim() && (i.content = s.content), s.heading && (i.heading = s.heading), s.explicitMarker && (i.explicitMarker = s.explicitMarker), s.videoNumber && (i.videoNumber = s.videoNumber), i.status === "done" && s.status !== "done" || (i.status = s.status)) : e.parts.push({ ...s });
           }
-          if (e.parts.sort((s, a) => s.partNumber - a.partNumber), e.missingParts && e.missingParts.length > 0) {
-            const s = e.missingParts.map((a) => `${e.id} P${a}`).join(", ");
+          e.parts.sort((s, i) => s.partNumber - i.partNumber);
+          const a = C(e);
+          if (e.mergeValidationStatus = a.valid ? "valid" : "invalid", a.valid && (e.status = "completed"), this.recalculateTabStatus(e), e.missingParts && e.missingParts.length > 0) {
+            const s = e.missingParts.map((i) => `${e.id} P${i}`).join(", ");
             this.addLog("WARNING", `${e.id}: MISSING: ${s}`, e.id);
           }
           if (e.duplicateParts && e.duplicateParts.length > 0) {
-            const s = e.duplicateParts.map((a) => `${e.id} P${a}`).join(", ");
+            const s = e.duplicateParts.map((i) => `${e.id} P${i}`).join(", ");
             this.addLog("WARNING", `${e.id}: DUPLICATE: ${s}`, e.id);
           }
           await this.persist();
@@ -798,10 +812,10 @@ class G {
         return { success: !0 };
       }
       case "CONTENT_PART_COMPLETED": {
-        const e = this.state.tabs.find((s) => s.id === t.vNumber);
+        const e = this.state.tabs.find((a) => a.id === t.vNumber);
         if (e) {
-          let s = e.parts.find((o) => o.partNumber === t.partNumber);
-          s ? (s.status = "done", t.content && t.content.trim() && (s.content = t.content), t.heading && (s.heading = t.heading), t.explicitMarker && (s.explicitMarker = t.explicitMarker), t.videoNumber && (s.videoNumber = t.videoNumber), s.extractedAt = Date.now()) : (s = {
+          let a = e.parts.find((o) => o.partNumber === t.partNumber);
+          a ? (a.status = "done", t.content && t.content.trim() && (a.content = t.content), t.heading && (a.heading = t.heading), t.explicitMarker && (a.explicitMarker = t.explicitMarker), t.videoNumber && (a.videoNumber = t.videoNumber), a.extractedAt = Date.now()) : (a = {
             partNumber: t.partNumber,
             label: t.explicitMarker || `${e.id} P${t.partNumber}`,
             explicitMarker: t.explicitMarker,
@@ -811,10 +825,10 @@ class G {
             content: t.content,
             extractedAt: Date.now(),
             downloaded: !1
-          }, e.parts.push(s)), e.parts.sort((o, l) => o.partNumber - l.partNumber);
-          const a = e.parts.find((o) => o.partNumber === t.partNumber + 1);
-          a && a.status === "waiting" && (a.status = "ready");
-          const i = D(e);
+          }, e.parts.push(a)), e.parts.sort((o, u) => o.partNumber - u.partNumber);
+          const s = e.parts.find((o) => o.partNumber === t.partNumber + 1);
+          s && s.status === "waiting" && (s.status = "ready");
+          const i = C(e);
           e.mergeValidationStatus = i.valid ? "valid" : "invalid", i.valid ? (e.status = "completed", this.addLog(
             "SUCCESS",
             `${e.id}: All ${e.totalParts} parts completed and verified. TXT MERGE VERIFIED ✓`,
@@ -823,12 +837,12 @@ class G {
             "SUCCESS",
             `${e.id} Part ${t.partNumber} completed successfully.`,
             e.id
-          ), await this.persist(), this.state.config.autoInsertNextPart && a && e.chromeTabId ? (this.addLog("INFO", `[AUTO] ${e.id}: Auto Run toggle is ON. Automatically requesting Part ${a.partNumber}...`, e.id), setTimeout(() => this.insertNextPart(e.id, a.partNumber), 1500)) : a && this.addLog("INFO", `[MANUAL MODE] ${e.id}: Part ${t.partNumber} completed. Ready for manual Alt-Tab submission of Part ${a.partNumber} (or enable Auto Run toggle).`, e.id);
+          ), await this.persist(), this.state.config.autoInsertNextPart && s && e.chromeTabId ? (this.addLog("INFO", `[AUTO] ${e.id}: Auto Run toggle is ON. Automatically requesting Part ${s.partNumber}...`, e.id), setTimeout(() => this.insertNextPart(e.id, s.partNumber), 1500)) : s && this.addLog("INFO", `[MANUAL MODE] ${e.id}: Part ${t.partNumber} completed. Ready for manual Alt-Tab submission of Part ${s.partNumber} (or enable Auto Run toggle).`, e.id);
         }
         return { success: !0 };
       }
       case "CONTENT_EXECUTION_ERROR": {
-        const e = this.state.tabs.find((s) => s.id === t.vNumber);
+        const e = this.state.tabs.find((a) => a.id === t.vNumber);
         return e && (e.status = "error", e.error = t.error, this.addLog("ERROR", `${e.id} error: ${t.error.problem}`, e.id, t.error), await this.persist()), { success: !0 };
       }
       case "LOG_MESSAGE":
@@ -843,8 +857,8 @@ class G {
    * Duplicates tabs according to a specified Video ID range (e.g. V20 to V25) or count.
    * If startVideoId and endVideoId are provided, tabs strictly receive those IDs (e.g. V20, V21, V22...).
    */
-  async duplicateChats(t, r, n, c, d) {
-    const e = !!(d && d.length > 0), s = e ? Array.from(new Set(d)).sort((h, m) => h - m) : (() => {
+  async duplicateChats(t, r, n, c, l) {
+    const e = !!(l && l.length > 0), a = e ? Array.from(new Set(l)).sort((h, m) => h - m) : (() => {
       const h = n && n > 0 ? n : 1, m = c && c >= h ? c : h + Math.max(1, t) - 1, S = [];
       for (let f = h; f <= m; f++) S.push(f);
       return S;
@@ -854,32 +868,32 @@ class G {
         success: !1,
         error: `Validation Error: Start Video ID (V${n}) cannot be greater than End Video ID (V${c}).`
       };
-    if (s.length === 0)
+    if (a.length === 0)
       return { success: !1, error: "Invalid Video ID range. Must create at least 1 tab." };
-    const a = s[0], i = s[s.length - 1], o = new Set(s);
+    const s = a[0], i = a[a.length - 1], o = new Set(a);
     this.state.tabs = this.state.tabs.filter((h) => o.has(h.index));
-    const p = (await chrome.tabs.query({})).filter((h) => h.url && this.isMetaUrl(h.url)), T = (await chrome.tabs.query({ active: !0, currentWindow: !0 }))[0];
-    let I = "https://www.meta.ai/", g = null;
-    T && T.url && this.isMetaUrl(T.url) ? (g = T, I = T.url) : p.length > 0 && (g = p[0], I = p[0].url || "https://www.meta.ai/");
+    const p = (await chrome.tabs.query({})).filter((h) => h.url && this.isMetaUrl(h.url)), g = (await chrome.tabs.query({ active: !0, currentWindow: !0 }))[0];
+    let P = "https://www.meta.ai/", T = null;
+    g && g.url && this.isMetaUrl(g.url) ? (T = g, P = g.url) : p.length > 0 && (T = p[0], P = p[0].url || "https://www.meta.ai/");
     let w = (r || "").trim();
-    if (!w && g && g.id)
+    if (!w && T && T.id)
       try {
-        const h = await chrome.tabs.sendMessage(g.id, { type: "GET_CURRENT_INPUT_TEXT" });
+        const h = await chrome.tabs.sendMessage(T.id, { type: "GET_CURRENT_INPUT_TEXT" });
         h && h.text && (w = h.text.trim());
       } catch {
       }
     w || (w = this.state.config.initialPrompt || "My Version of Title is:"), this.state.config.initialPrompt = w;
-    const E = [], M = g && g.id ? this.state.tabs.some((h) => h.chromeTabId === g.id) : !0;
+    const E = [], M = T && T.id ? this.state.tabs.some((h) => h.chromeTabId === T.id) : !0;
     let y = !1;
-    for (const h of s) {
+    for (const h of a) {
       const m = `V${h}`, S = this.state.tabs.findIndex((_) => _.id === m || _.index === h);
       let f = null;
-      if (!y && !M && g && g.id)
-        f = g.id, y = !0, this.addLog("INFO", `${m} assigned to active Qwen tab (Tab ID: ${f}).`, m);
+      if (!y && !M && T && T.id)
+        f = T.id, y = !0, this.addLog("INFO", `${m} assigned to active Qwen tab (Tab ID: ${f}).`, m);
       else
         try {
           f = (await chrome.tabs.create({
-            url: I,
+            url: P,
             active: !1
           })).id || null, this.addLog("INFO", `${m} opened (Meta Tab ID: ${f}).`, m);
         } catch (_) {
@@ -889,8 +903,8 @@ class G {
         id: m,
         index: h,
         chromeTabId: f,
-        qwenUrl: I,
-        metaUrl: I,
+        qwenUrl: P,
+        metaUrl: P,
         status: "incomplete",
         selected: !0,
         initialMessage: w,
@@ -909,7 +923,7 @@ class G {
       }), w && this.scheduleInitialTextInjection(f, w));
     }
     this.state.tabs.sort((h, m) => h.index - m.index);
-    const $ = e ? s.map((h) => `V${h}`).join(", ") : `V${a}–V${i}`;
+    const $ = e ? a.map((h) => `V${h}`).join(", ") : `V${s}–V${i}`;
     return this.addLog("SUCCESS", `Duplicated ${E.length} tabs for ${$}.`), await this.persist(), { success: !0, count: E.length, range: $, tabs: this.state.tabs };
   }
   /**
@@ -919,99 +933,99 @@ class G {
   async assignTitles(t, r, n) {
     if (t.length === 0)
       return { success: !1, error: "No titles provided." };
-    const c = r || 1, d = n || c + t.length - 1, e = this.state.tabs.filter((o, l) => {
-      const p = l + 1;
-      return o.index >= c && o.index <= d || p >= c && p <= d;
-    }), s = /* @__PURE__ */ new Set(), a = [];
+    const c = r || 1, l = n || c + t.length - 1, e = this.state.tabs.filter((o, u) => {
+      const p = u + 1;
+      return o.index >= c && o.index <= l || p >= c && p <= l;
+    }), a = /* @__PURE__ */ new Set(), s = [];
     for (const o of t) {
-      const l = o.trim().match(/^(?:\[?\s*[vV](\d+)\s*\]?|Video\s*(\d+))[\s.:\-_–—]*/i);
-      if (l) {
-        const p = parseInt(l[1] || l[2], 10), P = e.find(
-          (T) => (T.index === p || T.id === `V${p}`) && !s.has(T.id)
+      const u = o.trim().match(/^(?:\[?\s*[vV](\d+)\s*\]?|Video\s*(\d+))[\s.:\-_–—]*/i);
+      if (u) {
+        const p = parseInt(u[1] || u[2], 10), I = e.find(
+          (g) => (g.index === p || g.id === `V${p}`) && !a.has(g.id)
         );
-        if (P) {
-          P.title = o, this.recalculateTabStatus(P), this.addLog("INFO", `Title assigned to ${P.id}: "${P.title}"`, P.id), s.add(P.id);
+        if (I) {
+          I.title = o, this.recalculateTabStatus(I), this.addLog("INFO", `Title assigned to ${I.id}: "${I.title}"`, I.id), a.add(I.id);
           continue;
         }
       }
-      a.push(o);
+      s.push(o);
     }
     let i = 0;
     for (const o of e)
-      !s.has(o.id) && i < a.length && (o.title = a[i], this.recalculateTabStatus(o), this.addLog("INFO", `Title assigned to ${o.id}: "${o.title}"`, o.id), s.add(o.id), i++);
-    return this.addLog("INFO", `Assigned ${s.size} titles to range V${c}–V${d}.`), await this.persist(), { success: !0, tabs: this.state.tabs, assignedCount: s.size };
+      !a.has(o.id) && i < s.length && (o.title = s[i], this.recalculateTabStatus(o), this.addLog("INFO", `Title assigned to ${o.id}: "${o.title}"`, o.id), a.add(o.id), i++);
+    return this.addLog("INFO", `Assigned ${a.size} titles to range V${c}–V${l}.`), await this.persist(), { success: !0, tabs: this.state.tabs, assignedCount: a.size };
   }
   /**
    * Starts execution queue for target tabs ('all', 'selected', or specific V ID).
    */
   async startExecution(t) {
-    var s;
+    var a;
     this.state.isPaused = !1;
     const r = this.getTargetTabs(t);
     if (r.length === 0) {
-      const a = "No active Qwen browser tabs found matching selection. Please ensure Qwen tabs are open.";
-      return this.addLog("WARNING", a), { success: !1, error: a };
+      const s = "No active Qwen browser tabs found matching selection. Please ensure Qwen tabs are open.";
+      return this.addLog("WARNING", s), { success: !1, error: s };
     }
-    for (const a of r) {
-      if (!a.chromeTabId) continue;
+    for (const s of r) {
+      if (!s.chromeTabId) continue;
       const i = this.state.config.masterPrompt || "";
-      if (!a.masterPrompt && i && (a.masterPrompt = i), a.title && (!a.titleInjected || !a.promptInjected) && (a.titleInjected = !0, a.promptInjected = !0, chrome.tabs.sendMessage(a.chromeTabId, {
+      if (!s.masterPrompt && i && (s.masterPrompt = i), s.title && (!s.titleInjected || !s.promptInjected) && (s.titleInjected = !0, s.promptInjected = !0, chrome.tabs.sendMessage(s.chromeTabId, {
         type: "PASTE_PROMPT_ONLY",
-        title: a.title,
-        masterPrompt: a.masterPrompt || i,
-        vNumber: a.id
+        title: s.title,
+        masterPrompt: s.masterPrompt || i,
+        vNumber: s.id
       }).catch(() => {
-      })), a.thumbnailId && !a.thumbnailPasted) {
-        const o = await R(a.thumbnailId);
+      })), s.thumbnailId && !s.thumbnailPasted) {
+        const o = await R(s.thumbnailId);
         if (o) {
-          const l = await this.blobToBase64(o.blob);
-          a.thumbnailPasted = !0, chrome.tabs.sendMessage(a.chromeTabId, {
+          const u = await this.blobToBase64(o.blob);
+          s.thumbnailPasted = !0, chrome.tabs.sendMessage(s.chromeTabId, {
             type: "PASTE_THUMBNAIL_ONLY",
             thumbnail: {
-              name: o.asset.name || `${a.id}_thumb`,
+              name: o.asset.name || `${s.id}_thumb`,
               type: o.asset.type,
-              base64: l
+              base64: u
             },
-            vNumber: a.id
+            vNumber: s.id
           }).catch(() => {
           });
         }
       }
-      if (!a.scriptInjected) {
-        let o = "", l = `${a.id}_script.txt`;
-        if (a.scriptId) {
-          const p = await R(a.scriptId);
-          p && (o = await p.blob.text(), l = p.asset.name || l);
-        } else this.state.config.competitorScriptEnabled && ((s = this.state.config.competitorScriptText) != null && s.trim()) && (o = this.state.config.competitorScriptText.trim(), l = `${a.id}_Competitor_Script.txt`);
-        o && (a.scriptInjected = !0, chrome.tabs.sendMessage(a.chromeTabId, {
+      if (!s.scriptInjected) {
+        let o = "", u = `${s.id}_script.txt`;
+        if (s.scriptId) {
+          const p = await R(s.scriptId);
+          p && (o = await p.blob.text(), u = p.asset.name || u);
+        } else this.state.config.competitorScriptEnabled && ((a = this.state.config.competitorScriptText) != null && a.trim()) && (o = this.state.config.competitorScriptText.trim(), u = `${s.id}_Competitor_Script.txt`);
+        o && (s.scriptInjected = !0, chrome.tabs.sendMessage(s.chromeTabId, {
           type: "PASTE_SCRIPT_ONLY",
           script: {
-            name: l,
+            name: u,
             content: o
           },
-          vNumber: a.id
+          vNumber: s.id
         }).catch(() => {
         }));
       }
-      this.recalculateTabStatus(a), chrome.tabs.sendMessage(a.chromeTabId, { type: "UPDATE_HUD", tab: a }).catch(() => {
+      this.recalculateTabStatus(s), chrome.tabs.sendMessage(s.chromeTabId, { type: "UPDATE_HUD", tab: s }).catch(() => {
       });
     }
-    const n = [], c = (this.state.config.scriptMode || "original") === "original", d = !c && !!this.state.config.competitorScriptEnabled, e = !!(this.state.config.competitorScriptText && this.state.config.competitorScriptText.trim());
-    for (const a of r) {
+    const n = [], c = (this.state.config.scriptMode || "original") === "original", l = !c && !!this.state.config.competitorScriptEnabled, e = !!(this.state.config.competitorScriptText && this.state.config.competitorScriptText.trim());
+    for (const s of r) {
       const i = [];
-      a.title || i.push("Title not assigned"), !a.masterPrompt && !this.state.config.masterPrompt && i.push("Master Prompt missing");
-      const o = a.thumbnailId || a.thumbnailPasted || a.thumbnailStatus === "assigned", l = c || !d || a.scriptOptional || e || a.scriptId || a.scriptInjected || a.scriptStatus === "assigned";
-      o || i.push("Thumbnail image not uploaded or pasted into chat"), l || i.push("Competitor script not provided (paste script or switch to Original Script Mode)"), i.length > 0 ? (a.status = "incomplete", n.push({ id: a.id, missing: i })) : a.status = "ready";
+      s.title || i.push("Title not assigned"), !s.masterPrompt && !this.state.config.masterPrompt && i.push("Master Prompt missing");
+      const o = s.thumbnailId || s.thumbnailPasted || s.thumbnailStatus === "assigned", u = c || !l || s.scriptOptional || e || s.scriptId || s.scriptInjected || s.scriptStatus === "assigned";
+      o || i.push("Thumbnail image not uploaded or pasted into chat"), u || i.push("Competitor script not provided (paste script or switch to Original Script Mode)"), i.length > 0 ? (s.status = "incomplete", n.push({ id: s.id, missing: i })) : s.status = "ready";
     }
     if (n.length > 0) {
-      const a = n.map((o) => `${o.id}: [${o.missing.join("; ")}]`).join(`
+      const s = n.map((o) => `${o.id}: [${o.missing.join("; ")}]`).join(`
 `), i = c ? `Required assets missing for execution:
 
-${a}
+${s}
 
 Please assign Titles, Master Prompt, and Thumbnails before running.` : `Required assets missing for execution:
 
-${a}
+${s}
 
 Please upload Thumbnails and Competitor Scripts in the dashboard and push them to the Qwen chats before running.`;
       return this.addLog("ERROR", `Cannot run: ${n.length} tabs have missing files.`), await this.persist(), {
@@ -1020,8 +1034,8 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
         invalidTabs: n
       };
     }
-    return r.forEach((a) => {
-      this.executionQueue.includes(a.id) || this.executionQueue.push(a.id);
+    return r.forEach((s) => {
+      this.executionQueue.includes(s.id) || this.executionQueue.push(s.id);
     }), this.addLog("INFO", `Enqueued ${r.length} tabs for execution. Starting queue now...`), this.processQueue(), await this.persist(), { success: !0, queuedCount: r.length };
   }
   /**
@@ -1087,9 +1101,9 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
    * Switches to the tab, then inserts and runs that part exactly like normal generation.
    */
   async retryPart(t, r) {
-    const n = this.state.tabs.find((d) => d.id === t);
+    const n = this.state.tabs.find((l) => l.id === t);
     if (!n || !n.chromeTabId) return { success: !1, error: `Tab ${t} not found or closed.` };
-    const c = n.parts.find((d) => d.partNumber === r);
+    const c = n.parts.find((l) => l.partNumber === r);
     if (!c) return { success: !1, error: `Part ${r} not found in ${t}.` };
     this.addLog("INFO", `Retrying ${t} P${r}...`, t), c.status = "generating", n.status = "running", n.currentPart = r, await this.persist();
     try {
@@ -1103,94 +1117,94 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
         totalParts: n.totalParts || 0,
         wordCount: n.partWordCount || this.state.config.partWordCount || 4e3
       }), { success: !0 };
-    } catch (d) {
-      return c.status = "error", n.status = "error", this.addLog("ERROR", `Retry P${r} failed for ${t}: ${d.message}`, t), await this.persist(), { success: !1, error: d.message };
+    } catch (l) {
+      return c.status = "error", n.status = "error", this.addLog("ERROR", `Retry P${r} failed for ${t}: ${l.message}`, t), await this.persist(), { success: !1, error: l.message };
     }
   }
   /**
    * Triggers content script to insert next part.
    */
   async insertNextPart(t, r) {
-    const n = this.state.tabs.find((a) => a.id === t);
+    const n = this.state.tabs.find((s) => s.id === t);
     if (!n || !n.chromeTabId) return { success: !1, error: "Tab not found." };
     try {
       await chrome.tabs.update(n.chromeTabId, { active: !0 });
-      const a = await chrome.tabs.get(n.chromeTabId);
-      a.windowId && await chrome.windows.update(a.windowId, { focused: !0 });
+      const s = await chrome.tabs.get(n.chromeTabId);
+      s.windowId && await chrome.windows.update(s.windowId, { focused: !0 });
     } catch {
     }
-    if (await new Promise((a) => setTimeout(a, 600)), !await new Promise((a) => {
+    if (await new Promise((s) => setTimeout(s, 600)), !await new Promise((s) => {
       chrome.tabs.sendMessage(n.chromeTabId, { type: "PING" }, (i) => {
-        a(!chrome.runtime.lastError && i && i.pong);
-      }), setTimeout(() => a(!1), 300);
+        s(!chrome.runtime.lastError && i && i.pong);
+      }), setTimeout(() => s(!1), 300);
     }))
       try {
         await chrome.scripting.executeScript({
           target: { tabId: n.chromeTabId },
           files: ["content.js"]
-        }), await new Promise((a) => setTimeout(a, 800));
+        }), await new Promise((s) => setTimeout(s, 800));
       } catch {
       }
     n.status = "running", n.currentPart = r, n.error = null;
-    let d = n.parts.find((a) => a.partNumber === r);
-    if (d)
-      d.status = "generating";
+    let l = n.parts.find((s) => s.partNumber === r);
+    if (l)
+      l.status = "generating";
     else {
-      const a = parseInt(n.id.replace(/\D/g, ""), 10) || 1;
+      const s = parseInt(n.id.replace(/\D/g, ""), 10) || 1;
       n.parts.push({
         partNumber: r,
         label: `${n.id} P${r}`,
         explicitMarker: `${n.id} P${r}`,
-        videoNumber: a,
+        videoNumber: s,
         status: "generating",
         content: "",
         downloaded: !1
       });
     }
-    for (const a of n.parts)
-      a.partNumber !== r && a.status === "generating" && (a.status = "waiting");
+    for (const s of n.parts)
+      s.partNumber !== r && s.status === "generating" && (s.status = "waiting");
     this.addLog("INFO", `${n.id}: Writing Part ${r} Script...`, n.id), await this.persist();
-    const s = (n.scriptMode === "original" || (this.state.config.scriptMode || "original") === "original") && n.outlinePartInstructions ? n.outlinePartInstructions[r] : void 0;
+    const a = (n.scriptMode === "original" || (this.state.config.scriptMode || "original") === "original") && n.outlinePartInstructions ? n.outlinePartInstructions[r] : void 0;
     try {
-      const a = await chrome.tabs.sendMessage(n.chromeTabId, {
+      const s = await chrome.tabs.sendMessage(n.chromeTabId, {
         type: "EXECUTE_NEXT_PART_ACTION",
         partNumber: r,
         totalParts: n.totalParts || 0,
         wordCount: n.partWordCount || this.state.config.partWordCount || 4e3,
-        outlineInstruction: s
+        outlineInstruction: a
       });
-      return a && a.error ? (n.status = "error", n.error = L("CUSTOM", {
+      return s && s.error ? (n.status = "error", n.error = L("CUSTOM", {
         title: `Part ${r} Request Failed`,
-        problem: a.error,
+        problem: s.error,
         vNumber: n.id
-      }), this.addLog("ERROR", `${n.id} Part ${r} request failed: ${a.error}`, n.id, n.error), await this.persist(), { success: !1, error: a.error }) : { success: !0 };
-    } catch (a) {
+      }), this.addLog("ERROR", `${n.id} Part ${r} request failed: ${s.error}`, n.id, n.error), await this.persist(), { success: !1, error: s.error }) : { success: !0 };
+    } catch (s) {
       return n.status = "error", n.error = L("CUSTOM", {
         title: `Part ${r} Request Failed`,
-        problem: a.message,
+        problem: s.message,
         vNumber: n.id
-      }), this.addLog("ERROR", `${n.id} Part ${r} error: ${a.message}`, n.id, n.error), await this.persist(), { success: !1, error: a.message };
+      }), this.addLog("ERROR", `${n.id} Part ${r} error: ${s.message}`, n.id, n.error), await this.persist(), { success: !1, error: s.message };
     }
   }
   /**
    * Downloads a single generated part text file via chrome.downloads API.
    */
   async downloadPartFile(t, r) {
-    const n = this.state.tabs.find((s) => s.id === t);
+    const n = this.state.tabs.find((a) => a.id === t);
     if (!n) return { success: !1, error: "Tab not found." };
-    const c = n.parts.find((s) => s.partNumber === r);
+    const c = n.parts.find((a) => a.partNumber === r);
     if (!c || !c.content)
       return { success: !1, error: `Part ${r} content not available.` };
-    const d = `${t} P${r}.txt`, e = `data:text/plain;charset=utf-8,${encodeURIComponent(c.content)}`;
+    const l = `${t} P${r}.txt`, e = `data:text/plain;charset=utf-8,${encodeURIComponent(c.content)}`;
     try {
-      const s = await chrome.downloads.download({
+      const a = await chrome.downloads.download({
         url: e,
-        filename: d,
+        filename: l,
         saveAs: !1
       });
-      return c.downloaded = !0, this.addLog("SUCCESS", `Downloaded ${d} (ID: ${s}).`, t), await this.persist(), { success: !0, downloadId: s };
-    } catch (s) {
-      return this.addLog("ERROR", `Download failed for ${d}: ${s.message}`, t), { success: !1, error: s.message };
+      return c.downloaded = !0, this.addLog("SUCCESS", `Downloaded ${l} (ID: ${a}).`, t), await this.persist(), { success: !0, downloadId: a };
+    } catch (a) {
+      return this.addLog("ERROR", `Download failed for ${l}: ${a.message}`, t), { success: !1, error: a.message };
     }
   }
   getTargetTabs(t) {
@@ -1228,20 +1242,20 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
   }
   recalculateTabStatus(t) {
     if (t.status === "running" || t.status === "completed") return;
-    const r = !!t.title, n = !!t.masterPrompt, c = t.thumbnailStatus !== "none" || t.thumbnailPasted || !!t.thumbnailId, d = t.scriptMode === "original" || (this.state.config.scriptMode || "original") === "original", e = !d && !!this.state.config.competitorScriptEnabled, s = !!(this.state.config.competitorScriptText && this.state.config.competitorScriptText.trim()), a = d || !e || t.scriptOptional || s || t.scriptStatus !== "none" || t.scriptInjected || !!t.scriptId;
-    r && n && c && a ? (t.status = "ready", t.error = null) : t.status = "incomplete";
+    const r = !!t.title, n = !!t.masterPrompt, c = t.thumbnailStatus !== "none" || t.thumbnailPasted || !!t.thumbnailId, l = t.scriptMode === "original" || (this.state.config.scriptMode || "original") === "original", e = !l && !!this.state.config.competitorScriptEnabled, a = !!(this.state.config.competitorScriptText && this.state.config.competitorScriptText.trim()), s = l || !e || t.scriptOptional || a || t.scriptStatus !== "none" || t.scriptInjected || !!t.scriptId;
+    r && n && c && s ? (t.status = "ready", t.error = null) : t.status = "incomplete";
   }
   addLog(t, r, n, c) {
-    const d = /* @__PURE__ */ new Date(), e = d.toTimeString().split(" ")[0], s = {
+    const l = /* @__PURE__ */ new Date(), e = l.toTimeString().split(" ")[0], a = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       timeStr: e,
-      isoTime: d.toISOString(),
+      isoTime: l.toISOString(),
       level: t,
       message: r,
       vNumber: n,
       errorDetails: c
     };
-    this.state.logs.unshift(s), this.state.logs.length > 500 && this.state.logs.pop();
+    this.state.logs.unshift(a), this.state.logs.length > 500 && this.state.logs.pop();
   }
   /**
    * Reconciles all open browser tabs, links open Qwen tabs to VTabs,
@@ -1259,17 +1273,17 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
       );
       for (const c of n) {
         if (!c.id) continue;
-        let d = this.state.tabs.find((s) => s.chromeTabId === c.id);
-        if (d || (d = this.state.tabs.find((s) => !s.chromeTabId), d && (d.chromeTabId = c.id)), await new Promise((s) => {
-          chrome.tabs.sendMessage(c.id, { type: "PING" }, (a) => {
-            chrome.runtime.lastError || !a || !a.pong ? s(!1) : s(!0);
-          }), setTimeout(() => s(!1), 250);
+        let l = this.state.tabs.find((a) => a.chromeTabId === c.id);
+        if (l || (l = this.state.tabs.find((a) => !a.chromeTabId), l && (l.chromeTabId = c.id)), await new Promise((a) => {
+          chrome.tabs.sendMessage(c.id, { type: "PING" }, (s) => {
+            chrome.runtime.lastError || !s || !s.pong ? a(!1) : a(!0);
+          }), setTimeout(() => a(!1), 250);
         })) {
-          if (d)
+          if (l)
             try {
               chrome.tabs.sendMessage(
                 c.id,
-                { type: "SCAN_DOM_NOW", tab: d },
+                { type: "SCAN_DOM_NOW", tab: l },
                 () => {
                   chrome.runtime.lastError;
                 }

@@ -388,6 +388,28 @@ export class QwenAdapter {
         return Array.from(matches);
       }
     }
+
+    // Fallback: query message/response containers that contain assistant/script content
+    const candidates = this.document.querySelectorAll<HTMLElement>(
+      'div[class*="message" i], div[class*="response" i], div[class*="bubble" i], div[class*="markdown" i], [data-testid*="message" i], [data-testid*="response" i], article, section'
+    );
+    const validCandidates: HTMLElement[] = [];
+    candidates.forEach((el) => {
+      if (el.querySelector('textarea, input, [contenteditable="true"]')) return;
+      const text = (el.innerText || el.textContent || '').trim();
+      if (
+        text.length > 25 &&
+        /(part\s*0*\d+|total\s*parts?|v\s*0*\d+\s*[,/\\._\-–—:|~\s]*\s*p\s*0*\d+|outline\b|(?:completed|complete|done)\b)/i.test(text)
+      ) {
+        if (!validCandidates.some((v) => v.contains(el))) {
+          validCandidates.push(el);
+        }
+      }
+    });
+    if (validCandidates.length > 0) {
+      return validCandidates;
+    }
+
     return list;
   }
 
@@ -402,12 +424,14 @@ export class QwenAdapter {
       if (text && text.trim()) return text;
     }
 
-    // Fallback: search for any container with "Total Parts:" or "Part 1"
-    const candidates = this.document.querySelectorAll<HTMLElement>('.qwen-markdown, .markdown-body, div[class*="message"], article, section');
+    // Fallback: search for any container with script, part, outline, or completion content
+    const candidates = this.document.querySelectorAll<HTMLElement>(
+      '.qwen-markdown, .markdown-body, div[class*="message" i], div[class*="response" i], div[class*="bubble" i], div[class*="markdown" i], article, section, [data-testid*="message" i], [data-testid*="response" i]'
+    );
     for (let i = candidates.length - 1; i >= 0; i--) {
       const el = candidates[i];
       const text = el.innerText || el.textContent || '';
-      if (/(total\s*parts?|всего\s*частей|part\s*0*1\b)/i.test(text)) {
+      if (/(total\s*parts?|part\s*0*\d+|v\s*0*\d+\s*[,/\\._\-–—:|~\s]*\s*p\s*0*\d+|outline\b|(?:completed|complete|done)\b)/i.test(text)) {
         if (!el.querySelector('textarea, input, [contenteditable="true"]')) {
           return text;
         }

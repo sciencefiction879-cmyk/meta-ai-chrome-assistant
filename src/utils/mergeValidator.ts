@@ -12,6 +12,7 @@ export interface MergeValidationResult {
   videoNumber: string;
   totalParts: number;
   completedPartsCount: number;
+  missingParts: number[];
   checks: ValidationCheck[];
   errors: string[];
   warnings: string[];
@@ -65,19 +66,27 @@ export function validateVideoMerge(tab: VTab): MergeValidationResult {
   // 3 & 4. No missing parts (1..totalParts)
   const partNumbers = doneParts.map((p) => p.partNumber);
   const missingParts: number[] = [];
-  for (let i = 1; i <= (totalParts || doneParts.length); i++) {
-    if (!partNumbers.includes(i)) {
-      missingParts.push(i);
+  if (totalParts > 0) {
+    for (let i = 1; i <= totalParts; i++) {
+      if (!partNumbers.includes(i)) {
+        missingParts.push(i);
+      }
+    }
+  } else {
+    for (let i = 1; i <= doneParts.length; i++) {
+      if (!partNumbers.includes(i)) {
+        missingParts.push(i);
+      }
     }
   }
-  const noMissing = missingParts.length === 0 && doneParts.length > 0;
+  const noMissing = missingParts.length === 0 && doneParts.length > 0 && totalParts > 0;
   checks.push({
     id: 'check-missing',
     name: 'No Missing Parts',
     passed: noMissing,
     detail: noMissing ? `All ${totalParts} parts are present` : `MISSING: ${missingParts.map((n) => `${vNumber} P${n}`).join(', ')}`
   });
-  if (!noMissing) {
+  if (!noMissing && missingParts.length > 0) {
     errors.push(`MISSING: ${missingParts.map((n) => `${vNumber} P${n}`).join(', ')}`);
   }
 
@@ -179,18 +188,32 @@ export function validateVideoMerge(tab: VTab): MergeValidationResult {
     errors.push(`${vNumber}: Foreign video parts detected: ${crossVideoParts.map((p) => p.explicitMarker || `P${p.partNumber}`).join(', ')}. Different videos must never be merged.`);
   }
 
-  const valid = errors.length === 0 && doneParts.length > 0 && (totalParts > 0 ? doneParts.length >= totalParts : true);
-  const statusLabel = valid
-    ? 'TXT MERGE VERIFIED ✓'
-    : errors.length === 0
-    ? 'IN PROGRESS ⏳'
-    : 'MERGE VALIDATION FAILED ✕';
+  // Strict Validation: Expected Parts === Detected Completed Parts === Merged Parts
+  const valid = totalParts > 0 &&
+                doneParts.length === totalParts &&
+                missingParts.length === 0 &&
+                errors.length === 0;
+
+  let statusLabel: string;
+  if (valid) {
+    statusLabel = 'TXT MERGE VERIFIED ✓';
+  } else if (missingParts.length > 0) {
+    statusLabel = `MERGE INCOMPLETE — ${missingParts.map((n) => `P${n}`).join(', ')} MISSING`;
+  } else if (totalParts > 0 && doneParts.length < totalParts) {
+    statusLabel = `MERGE INCOMPLETE — ${doneParts.length}/${totalParts} Parts (${totalParts - doneParts.length} Missing)`;
+  } else if (errors.length > 0) {
+    statusLabel = 'MERGE VALIDATION FAILED ✕';
+  } else {
+    statusLabel = 'IN PROGRESS ⏳';
+  }
 
   return {
     valid,
     videoNumber: vNumber,
     totalParts,
     completedPartsCount: doneParts.length,
+    missingParts,
+    duplicateParts: uniqueDuplicates,
     checks,
     errors,
     warnings,

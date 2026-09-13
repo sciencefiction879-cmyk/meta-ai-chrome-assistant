@@ -1155,5 +1155,67 @@ test('Part Completion Marker Variations (V3.6) - matches markdown, colons, brack
   assert.strictEqual(hasPartCompletionMarker('V2, P4 = COMPLETED', 1, 4), false);
 });
 
+test('Strict Merge Validation (V3.6) - Expected Parts === Detected Completed Parts === Merged Parts', () => {
+  const tab6PartsIncomplete: VTab = {
+    id: 'V1',
+    index: 1,
+    chromeTabId: 1,
+    qwenUrl: '',
+    status: 'ready',
+    selected: true,
+    initialMessage: '',
+    title: 'Test 6 Parts',
+    masterPrompt: '',
+    thumbnailStatus: 'none',
+    scriptStatus: 'none',
+    totalParts: 6,
+    currentPart: 5,
+    lastUpdated: Date.now(),
+    parts: [
+      { partNumber: 1, label: 'V1 P1', explicitMarker: 'V1 P1', videoNumber: 1, status: 'done', content: 'Script prose part 1 long text here...', downloaded: false },
+      { partNumber: 2, label: 'V1 P2', explicitMarker: 'V1 P2', videoNumber: 1, status: 'done', content: 'Script prose part 2 long text here...', downloaded: false },
+      { partNumber: 3, label: 'V1 P3', explicitMarker: 'V1 P3', videoNumber: 1, status: 'done', content: 'Script prose part 3 long text here...', downloaded: false },
+      { partNumber: 4, label: 'V1 P4', explicitMarker: 'V1 P4', videoNumber: 1, status: 'done', content: 'Script prose part 4 long text here...', downloaded: false },
+      { partNumber: 5, label: 'V1 P5', explicitMarker: 'V1 P5', videoNumber: 1, status: 'done', content: 'Script prose part 5 long text here...', downloaded: false }
+      // Part 6 missing!
+    ]
+  };
+
+  const val = validateVideoMerge(tab6PartsIncomplete);
+  assert.strictEqual(val.valid, false, 'Merge must be invalid when part 6 is missing');
+  assert.strictEqual(val.completedPartsCount, 5);
+  assert.deepStrictEqual(val.missingParts, [6]);
+  assert.ok(val.errors.some((e) => e.includes('MISSING: V1 P6')));
+
+  // Add final part (P6)
+  tab6PartsIncomplete.parts.push({
+    partNumber: 6,
+    label: 'V1 P6',
+    explicitMarker: 'V1 P6',
+    videoNumber: 1,
+    status: 'done',
+    content: 'Script prose part 6 final part text here...',
+    downloaded: false
+  });
+
+  const valComplete = validateVideoMerge(tab6PartsIncomplete);
+  assert.strictEqual(valComplete.valid, true, 'Merge must be valid when all 6 parts are completed');
+  assert.strictEqual(valComplete.completedPartsCount, 6);
+  assert.strictEqual(valComplete.missingParts.length, 0);
+  assert.strictEqual(valComplete.statusLabel, 'TXT MERGE VERIFIED ✓');
+});
+
+test('Final Part is Mandatory & detectPartsFromMessages with V1P2= completed', () => {
+  const outlineMsg = `VIDEO OUTLINE: Total Parts: 2\n1. Part 1 - Hook\n2. Part 2 - Climax\nOUTLINE = GENERATED`;
+  const part1Msg = `V1 P1 — Hook\nThis is part 1 script with full prose details.\nV1, P1 = COMPLETED`;
+  const part2Msg = `V1/P2: Climax\nThis is part 2 final script with full prose details.\nV1P2= completed`;
+
+  const result = detectPartsFromMessages([outlineMsg, part1Msg, part2Msg], 2, true, 1);
+  assert.strictEqual(result.parts.length, 2);
+  assert.strictEqual(result.parts[0].status, 'done');
+  assert.strictEqual(result.parts[1].status, 'done', 'Part 2 with V1P2= completed must be status done even if isGenerating is true');
+});
+
+
 
 

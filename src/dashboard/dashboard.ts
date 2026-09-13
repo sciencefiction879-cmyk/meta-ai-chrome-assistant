@@ -1888,9 +1888,13 @@ class DashboardController {
       doneParts.sort((a, b) => a.partNumber - b.partNumber);
 
       const val = validateVideoMerge(tab);
+      const missingStr = val.missingParts && val.missingParts.length > 0
+        ? val.missingParts.map((n) => `P${n}`).join(', ')
+        : `${val.completedPartsCount}/${tab.totalParts || val.completedPartsCount} Parts`;
+
       const valBadge = val.valid
         ? '<span class="badge badge-success" style="font-size: 11px;">TXT MERGE VERIFIED ✓</span>'
-        : `<span class="badge badge-warning" style="font-size: 10px;" title="${val.errors.join('; ')}">Validation: ${val.completedPartsCount}/${tab.totalParts || val.completedPartsCount} Parts</span>`;
+        : `<span class="badge badge-danger" style="font-size: 10px; font-weight: bold; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444;" title="${val.errors.join('; ')}">MERGE INCOMPLETE — ${missingStr} MISSING</span>`;
 
       if (doneParts.length === 0) {
         return `
@@ -1942,10 +1946,16 @@ class DashboardController {
               ${missingWarningHtml}
               ${duplicateWarningHtml}
             </div>
-            <!-- Requirement 5: Download Merged TXT -->
-            <button class="btn btn-sm btn-primary btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600;" title="Download complete merged script for ${tab.id}">
-              📄 Download Merged (${tab.id} Script.txt)
-            </button>
+            <!-- Requirement 1 & 4: Strict Download Merged TXT -->
+            ${val.valid ? `
+              <button class="btn btn-sm btn-success btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600;" title="Download complete verified merged script for ${tab.id}">
+                📄 Download Merged (${tab.id} Script.txt) ✓
+              </button>
+            ` : `
+              <button class="btn btn-sm btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600; background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4);" title="${val.errors.join('; ')}">
+                ⛔ MERGE INCOMPLETE — ${missingStr} MISSING
+              </button>
+            `}
           </div>
 
           <!-- Video Parts List -->
@@ -2005,15 +2015,22 @@ class DashboardController {
   }
 
   // Requirement 5, 6, 10, 11, 12, 13, 15: Verify and Download Merged Video with Headings
+  // Requirement 1, 2, 3, 4: Strict Mandatory Merge Validation
   private downloadMergedVideo(vNumber: string): void {
     const tab = this.state.tabs.find((t) => t.id === vNumber);
     if (!tab) return;
 
-    // Requirement 15: Mandatory Merge Validation
     const val = validateVideoMerge(tab);
     if (!val.valid) {
-      const proceed = confirm(`⚠️ TXT Merge Validation Warning for ${vNumber}:\n\n${val.errors.join('\n')}\n\nDo you still wish to download the available parts?`);
-      if (!proceed) return;
+      alert(
+        `⚠️ CANNOT DOWNLOAD INCOMPLETE MERGE FOR ${vNumber}:\n\n` +
+        `Expected Parts: ${tab.totalParts || 'Unknown'}\n` +
+        `Completed Parts: ${val.completedPartsCount}\n` +
+        (val.missingParts && val.missingParts.length > 0 ? `Missing Parts: ${val.missingParts.map((n) => `${vNumber} P${n}`).join(', ')}\n\n` : '\n') +
+        `Errors:\n${val.errors.join('\n')}\n\n` +
+        `All ${tab.totalParts || 'required'} parts must be completed with their matching completion markers (e.g. ${vNumber}, P{x} = COMPLETED) before merging.`
+      );
+      return;
     }
 
     const doneParts = tab.parts.filter((p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline);
@@ -2046,6 +2063,11 @@ class DashboardController {
     );
 
     if (badge) badge.textContent = `${filtered.length} Logs`;
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No logs recorded yet.</div>';
+      return;
+    }
 
     container.innerHTML = filtered.map((l) => {
       let formattedMsg = l.message;
@@ -2098,6 +2120,11 @@ class DashboardController {
     });
   }
 
+  private escapeHtml(str: string): string {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   // Dynamic Merged File Download: Automatically renames the entire downloaded TXT file to the Video ID range (e.g. "V1 to V5 Script.txt")
   private downloadAllCombinedFile(): void {
     const sortedTabs = [...this.state.tabs].sort((a, b) => {
@@ -2106,21 +2133,24 @@ class DashboardController {
       return numA - numB;
     });
 
-    const validTabs = sortedTabs.filter((tab) => {
-      return tab.parts.some(
-        (p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline
-      );
-    });
+    const verifiedTabs = sortedTabs.filter((tab) => validateVideoMerge(tab).valid);
+    const incompleteTabs = sortedTabs.filter((tab) => !validateVideoMerge(tab).valid && tab.parts.some((p) => p.status === 'done' && p.content));
 
-    if (validTabs.length === 0) {
-      alert('No completed parts found to download.');
+    if (verifiedTabs.length === 0) {
+      const missingDetails = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
+      alert(`⛔ MERGE INCOMPLETE — No videos have all required parts completed:\n\n${missingDetails || 'No completed videos found.'}\n\nAll required parts must be completed before downloading merged script.`);
       return;
+    }
+
+    if (incompleteTabs.length > 0) {
+      const skippedList = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
+      alert(`⚠️ Notice: The following videos are INCOMPLETE and skipped from merged download:\n\n${skippedList}\n\nOnly 100% verified complete videos will be included.`);
     }
 
     let combinedContent = '';
     const includedVideoIds: string[] = [];
 
-    validTabs.forEach((tab, vIdx) => {
+    verifiedTabs.forEach((tab, vIdx) => {
       const doneParts = tab.parts.filter(
         (p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline
       );
@@ -2149,12 +2179,23 @@ class DashboardController {
   private downloadAllIndividualFiles(): void {
     let triggered = 0;
     const sortedTabs = [...this.state.tabs].sort((a, b) => a.index - b.index);
+    const verifiedTabs = sortedTabs.filter((tab) => validateVideoMerge(tab).valid);
+    const incompleteTabs = sortedTabs.filter((tab) => !validateVideoMerge(tab).valid && tab.parts.some((p) => p.status === 'done' && p.content));
 
-    sortedTabs.forEach((tab) => {
-      // Strict video-by-video isolation: only parts belonging to this specific video!
+    if (verifiedTabs.length === 0) {
+      const missingDetails = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
+      alert(`⛔ MERGE INCOMPLETE — No videos have all required parts completed:\n\n${missingDetails || 'No completed videos found.'}\n\nAll required parts must be completed before downloading merged scripts.`);
+      return;
+    }
+
+    if (incompleteTabs.length > 0) {
+      const skippedList = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
+      alert(`⚠️ Notice: The following videos are INCOMPLETE and skipped from download:\n\n${skippedList}\n\nOnly 100% verified complete videos will be included.`);
+    }
+
+    verifiedTabs.forEach((tab) => {
       const doneParts = tab.parts.filter((p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline);
       if (doneParts.length > 0) {
-        // Strict part-by-part order: P1 -> P2 -> P3...
         doneParts.sort((a, b) => a.partNumber - b.partNumber);
         
         let mergedContent = '';
@@ -2169,20 +2210,28 @@ class DashboardController {
         triggered++;
       }
     });
-
-    if (triggered === 0) {
-      alert('No completed parts found to download.');
-    }
   }
 
   // Download All Merged as ZIP
   private async downloadAllAsZip(): Promise<void> {
     const filesToZip: { filename: string; content: string }[] = [];
     const sortedTabs = [...this.state.tabs].sort((a, b) => a.index - b.index);
+    const verifiedTabs = sortedTabs.filter((tab) => validateVideoMerge(tab).valid);
+    const incompleteTabs = sortedTabs.filter((tab) => !validateVideoMerge(tab).valid && tab.parts.some((p) => p.status === 'done' && p.content));
     const includedVideoIds: string[] = [];
 
-    sortedTabs.forEach((tab) => {
-      // Strict video-by-video isolation: only parts belonging to this specific video!
+    if (verifiedTabs.length === 0) {
+      const missingDetails = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
+      alert(`⛔ MERGE INCOMPLETE — No videos have all required parts completed:\n\n${missingDetails || 'No completed videos found.'}\n\nAll required parts must be completed before downloading ZIP bundle.`);
+      return;
+    }
+
+    if (incompleteTabs.length > 0) {
+      const skippedList = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
+      alert(`⚠️ Notice: The following videos are INCOMPLETE and skipped from ZIP bundle:\n\n${skippedList}\n\nOnly 100% verified complete videos will be included.`);
+    }
+
+    verifiedTabs.forEach((tab) => {
       const doneParts = tab.parts.filter((p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline);
       if (doneParts.length > 0) {
         doneParts.sort((a, b) => a.partNumber - b.partNumber);

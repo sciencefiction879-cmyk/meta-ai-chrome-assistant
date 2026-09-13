@@ -14,6 +14,7 @@ class MetaContentController {
   private monitorInterval: number | null = null;
   private monitorObserver: MutationObserver | null = null;
   private lastDetectedText = '';
+  private lastGeneratingState = false;
 
   constructor() {
     this.adapter = new MetaAdapter(document);
@@ -188,13 +189,19 @@ class MetaContentController {
           break;
         }
 
-        case 'SCAN_DOM_NOW': {
+        case 'SCAN_DOM_NOW':
+        case 'RESYNC_DOM_NOW': {
+          this.lastDetectedText = '';
           if (message.tab) {
             this.currentTabState = message.tab;
             this.hud.update(message.tab);
           }
           this.checkAndReportPartsUpdate(true);
-          sendResponse({ success: true, tab: this.currentTabState });
+          sendResponse({
+            success: true,
+            tab: this.currentTabState,
+            parts: this.currentTabState?.parts || []
+          });
           break;
         }
 
@@ -1223,10 +1230,19 @@ class MetaContentController {
 
     const latestText = this.adapter.findLatestResponse();
     if (!latestText) return;
-    if (!force && latestText.trim() === this.lastDetectedText) return;
-    this.lastDetectedText = latestText.trim();
 
     const isGeneratingNow = this.adapter.isGenerating() || this.isProcessing;
+    const generatingStateChanged = isGeneratingNow !== this.lastGeneratingState;
+    this.lastGeneratingState = isGeneratingNow;
+
+    const hasIncompletePart = Boolean(
+      this.currentTabState?.parts?.some((p) => p.status === 'generating' || p.status === 'waiting')
+    );
+
+    if (!force && !generatingStateChanged && !hasIncompletePart && latestText.trim() === this.lastDetectedText) {
+      return;
+    }
+    this.lastDetectedText = latestText.trim();
     let vId = this.currentTabState.id;
     let vNum = parseInt(vId.replace(/\D/g, ''), 10) || 1;
 
@@ -1303,13 +1319,31 @@ class MetaContentController {
           if (newP.heading) existP.heading = newP.heading;
           if (newP.explicitMarker) existP.explicitMarker = newP.explicitMarker;
           if (newP.videoNumber) existP.videoNumber = newP.videoNumber;
-          existP.status = newP.status;
+          // Never downgrade a completed part to generating or waiting
+          if (existP.status === 'done' && newP.status !== 'done') {
+            // Keep done
+          } else {
+            existP.status = newP.status;
+          }
         } else {
           this.currentTabState!.parts.push({ ...newP });
         }
       });
 
       this.currentTabState.parts.sort((a, b) => a.partNumber - b.partNumber);
+
+      // Update currentPart dynamically based on highest done part or highest detected part
+      const doneParts = this.currentTabState.parts.filter((p) => p.status === 'done');
+      const maxDonePart = doneParts.length > 0 ? Math.max(...doneParts.map((p) => p.partNumber)) : 0;
+      const highestDetectedPart = this.currentTabState.parts.length > 0
+        ? Math.max(...this.currentTabState.parts.map((p) => p.partNumber))
+        : 1;
+
+      if (this.currentTabState.totalParts > 0 && maxDonePart >= this.currentTabState.totalParts) {
+        this.currentTabState.currentPart = this.currentTabState.totalParts;
+      } else {
+        this.currentTabState.currentPart = Math.max(maxDonePart + 1, highestDetectedPart, 1);
+      }
 
       if (detection.lifecycleStage) {
         this.currentTabState.lifecycleStage = detection.lifecycleStage;
@@ -1357,23 +1391,20 @@ class MetaContentController {
           liveDebugStatus: this.currentTabState.liveDebugStatus
         });
 
-        // ONLY report completion if Qwen has completely finished generating!
-        if (!isGeneratingNow) {
-          const completedPart = this.currentTabState.parts.find(
-            (p) => p.partNumber === currentPartNum && p.content && p.status === 'done'
-          );
-          if (completedPart && completedPart.content) {
+        // Report ALL verified completed parts with content to background
+        this.currentTabState.parts.forEach((p) => {
+          if (p.status === 'done' && p.content && p.content.trim()) {
             this.safeSendMessage({
               type: 'CONTENT_PART_COMPLETED',
               vNumber: vId,
-              partNumber: completedPart.partNumber,
-              content: completedPart.content,
-              heading: completedPart.heading,
-              explicitMarker: completedPart.explicitMarker,
-              videoNumber: completedPart.videoNumber
+              partNumber: p.partNumber,
+              content: p.content,
+              heading: p.heading,
+              explicitMarker: p.explicitMarker,
+              videoNumber: p.videoNumber
             });
           }
-        }
+        });
       }
     }
   }

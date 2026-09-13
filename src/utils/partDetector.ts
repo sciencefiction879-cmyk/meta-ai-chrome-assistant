@@ -147,7 +147,7 @@ export function hasPartCompletionMarker(
   // 1. Exact match with videoNumber: V{videoNumber}, P{partNumber} = COMPLETED
   if (videoNumber && videoNumber > 0) {
     const vMatchRegex = new RegExp(
-      `[#*_\\[\\(\`\\s]*V\\s*0*${videoNumber}\\s*[,/\\\\._\\-–—:|~\\s]*\\s*(?:P|PART)\\s*0*${partNumber}[#*_\\]\\)\`\\s]*[:=\\-–—~][#*_\\[\\(\`\\s]*(?:COMPLETED|COMPLETE|DONE|FINISHED)\\b`,
+      `[#*_\\[\\(\`\\s]*V\\s*0*${videoNumber}\\s*[,/\\\\._\\-–—:|~\\s]*\\s*(?:P|PART)\\s*0*${partNumber}[#*_\\]\\)\`\\s]*(?:[:=\\-–—~\\s]+)[#*_\\[\\(\`\\s]*(?:COMPLETED|COMPLETE|DONE|FINISHED|ЗАВЕРШЕНО|ВЫПОЛНЕНО)\\b`,
       'i'
     );
     if (vMatchRegex.test(text)) return true;
@@ -155,12 +155,12 @@ export function hasPartCompletionMarker(
 
   // 2. Part-only match: P{partNumber} = COMPLETED (ensure not prefixed by a conflicting video number)
   const pOnlyRegex = new RegExp(
-    `[#*_\\[\\(\`\\s]*(?:P|PART)\\s*0*${partNumber}[#*_\\]\\)\`\\s]*[:=\\-–—~][#*_\\[\\(\`\\s]*(?:COMPLETED|COMPLETE|DONE|FINISHED)\\b`,
+    `[#*_\\[\\(\`\\s]*(?:P|PART)\\s*0*${partNumber}[#*_\\]\\)\`\\s]*(?:[:=\\-–—~\\s]+)[#*_\\[\\(\`\\s]*(?:COMPLETED|COMPLETE|DONE|FINISHED|ЗАВЕРШЕНО|ВЫПОЛНЕНО)\\b`,
     'i'
   );
   if (pOnlyRegex.test(text)) {
     const vMismatched = text.match(
-      new RegExp(`[#*_\\[\\(\`\\s]*V\\s*0*(\\d+)\\s*[,/\\\\._\\-–—:|~\\s]*\\s*(?:P|PART)\\s*0*${partNumber}[#*_\\]\\)\`\\s]*[:=\\-–—~][#*_\\[\\(\`\\s]*(?:COMPLETED|COMPLETE|DONE|FINISHED)\\b`, 'i')
+      new RegExp(`[#*_\\[\\(\`\\s]*V\\s*0*(\\d+)\\s*[,/\\\\._\\-–—:|~\\s]*\\s*(?:P|PART)\\s*0*${partNumber}[#*_\\]\\)\`\\s]*(?:[:=\\-–—~\\s]+)[#*_\\[\\(\`\\s]*(?:COMPLETED|COMPLETE|DONE|FINISHED|ЗАВЕРШЕНО|ВЫПОЛНЕНО)\\b`, 'i')
     );
     if (vMismatched && videoNumber && videoNumber > 0) {
       const parsedV = parseInt(vMismatched[1], 10);
@@ -171,7 +171,7 @@ export function hasPartCompletionMarker(
 
   // 3. General match: V{any}, P{partNumber} = COMPLETED
   const generalRegex = new RegExp(
-    `[#*_\\[\\(\`\\s]*V\\s*0*(\\d+)\\s*[,/\\\\._\\-–—:|~\\s]*\\s*(?:P|PART)\\s*0*${partNumber}[#*_\\]\\)\`\\s]*[:=\\-–—~][#*_\\[\\(\`\\s]*(?:COMPLETED|COMPLETE|DONE|FINISHED)\\b`,
+    `[#*_\\[\\(\`\\s]*V\\s*0*(\\d+)\\s*[,/\\\\._\\-–—:|~\\s]*\\s*(?:P|PART)\\s*0*${partNumber}[#*_\\]\\)\`\\s]*(?:[:=\\-–—~\\s]+)[#*_\\[\\(\`\\s]*(?:COMPLETED|COMPLETE|DONE|FINISHED|ЗАВЕРШЕНО|ВЫПОЛНЕНО)\\b`,
     'i'
   );
   const generalMatch = text.match(generalRegex);
@@ -1270,7 +1270,7 @@ export function detectPartsFromMessages(
         generateIntelligentHeading(pNum, cleaned);
 
       const hasCompletion = hasPartCompletionMarker(primary, vNum, pNum);
-      const isPartComplete = !msgGenerating && hasCompletion && Boolean(cleaned && cleaned.trim().length > 20);
+      const isPartComplete = hasCompletion && Boolean(cleaned && cleaned.trim().length > 20);
       const partStatus: PartStatus = isPartComplete ? 'done' : 'generating';
 
       if (!existing) {
@@ -1294,7 +1294,7 @@ export function detectPartsFromMessages(
         if (heading) existing.heading = heading;
         if (isPartComplete) {
           existing.status = 'done';
-          existing.extractedAt = Date.now();
+          existing.extractedAt = existing.extractedAt || Date.now();
         } else if (!existing.status || existing.status === 'ready' || existing.status === 'waiting') {
           existing.status = 'generating';
         }
@@ -1333,7 +1333,7 @@ export function detectPartsFromMessages(
         generateIntelligentHeading(m.partNumber, cleaned);
 
       const hasCompletion = hasPartCompletionMarker(primary, m.videoNumber, m.partNumber);
-      const isPartComplete = !msgGenerating && hasCompletion && Boolean(cleaned && cleaned.trim().length > 20);
+      const isPartComplete = hasCompletion && Boolean(cleaned && cleaned.trim().length > 20);
       const partStatus: PartStatus = isPartComplete ? 'done' : 'generating';
 
       if (!existing) {
@@ -1376,7 +1376,7 @@ export function detectPartsFromMessages(
     } else {
       const cleaned = cleanScriptContent(primary);
       const hasCompletion = hasPartCompletionMarker(primary, targetVideoNumber, expectedP);
-      const isPartComplete = !msgGenerating && hasCompletion && Boolean(cleaned && cleaned.trim().length > 20);
+      const isPartComplete = hasCompletion && Boolean(cleaned && cleaned.trim().length > 20);
       const vPrefix = targetVideoNumber ? `V${targetVideoNumber} ` : '';
       const existing = detectedPartsMap.get(expectedP);
 
