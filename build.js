@@ -87,10 +87,10 @@ async function runBuild() {
     }
   }
 
-  // 5. Automatically synchronize into all loaded extension directories (v3.5.0, v1.0.0, v3.6.0)
+  // 5. Automatically synchronize into all loaded extension directories (v3.5.0, v1.0.0, v3.6.0, v3.7.0)
   // so whenever the user clicks Chrome's reload button, the latest version is immediately loaded!
   console.log('🔄 Syncing build to loaded extension directories...');
-  const syncDirs = ['meta-ai-assistant-v3.5.0', 'meta-ai-assistant-v1.0.0', 'meta-ai-assistant-v3.6.0'];
+  const syncDirs = ['meta-ai-assistant-v3.5.0', 'meta-ai-assistant-v1.0.0', 'meta-ai-assistant-v3.6.0', 'meta-ai-assistant-v3.7.0'];
   for (const dir of syncDirs) {
     const target = path.resolve(dir);
     if (fs.existsSync(target)) {
