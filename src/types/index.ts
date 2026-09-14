@@ -69,6 +69,8 @@ export interface VTab {
   initialMessageInjected?: boolean;
   title: string;
   titleInjected?: boolean;
+  titlePushed?: boolean;
+  pushedTitleText?: string;
   masterPrompt: string;
   promptInjected?: boolean;
   thumbnailId?: string;

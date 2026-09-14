@@ -1,20 +1,20 @@
 var F = Object.defineProperty;
-var V = (b, t, r) => t in b ? F(b, t, { enumerable: !0, configurable: !0, writable: !0, value: r }) : b[t] = r;
-var C = (b, t, r) => V(b, typeof t != "symbol" ? t + "" : t, r);
-const Q = "MetaExtensionDB";
+var k = (b, t, r) => t in b ? F(b, t, { enumerable: !0, configurable: !0, writable: !0, value: r }) : b[t] = r;
+var C = (b, t, r) => k(b, typeof t != "symbol" ? t + "" : t, r);
+const V = "MetaExtensionDB";
 const x = "assets";
-function k() {
+function Q() {
   return new Promise((b, t) => {
-    const r = indexedDB.open(Q, 1);
+    const r = indexedDB.open(V, 1);
     r.onupgradeneeded = () => {
-      const n = r.result;
-      n.objectStoreNames.contains(x) || n.createObjectStore(x, { keyPath: "id" });
+      const o = r.result;
+      o.objectStoreNames.contains(x) || o.createObjectStore(x, { keyPath: "id" });
     }, r.onsuccess = () => b(r.result), r.onerror = () => t(r.error);
   });
 }
 async function R(b) {
-  const t = await k();
-  return new Promise((r, n) => {
+  const t = await Q();
+  return new Promise((r, o) => {
     const e = t.transaction(x, "readonly").objectStore(x).get(b);
     e.onsuccess = () => {
       const a = e.result;
@@ -35,21 +35,21 @@ async function R(b) {
         },
         blob: s
       });
-    }, e.onerror = () => n(e.error);
+    }, e.onerror = () => o(e.error);
   });
 }
-const D = "meta_assistant_workflow_state", v = "qwen_assistant_workflow_state";
+const v = "meta_assistant_workflow_state", D = "qwen_assistant_workflow_state";
 async function B() {
   return typeof chrome > "u" || !chrome.storage || !chrome.storage.local ? null : new Promise((b) => {
-    chrome.storage.local.get([D, v], (t) => {
-      b(t[D] || t[v] || null);
+    chrome.storage.local.get([v, D], (t) => {
+      b(t[v] || t[D] || null);
     });
   });
 }
 async function G(b) {
   if (!(typeof chrome > "u" || !chrome.storage || !chrome.storage.local))
     return new Promise((t) => {
-      chrome.storage.local.set({ [D]: b }, () => {
+      chrome.storage.local.set({ [v]: b }, () => {
         t();
       });
     });
@@ -170,7 +170,7 @@ function O(b, t) {
   }
 }
 function L(b) {
-  const t = b.id || "V1", r = b.totalParts || 0, n = b.parts || [], c = [], d = [], e = [], a = n.filter((l) => l.status === "done" && l.content && l.content.trim().length > 0), s = /^V\d+$/i.test(t);
+  const t = b.id || "V1", r = b.totalParts || 0, o = b.parts || [], c = [], d = [], e = [], a = o.filter((l) => l.status === "done" && l.content && l.content.trim().length > 0), s = /^V\d+$/i.test(t);
   c.push({
     id: "check-vnum",
     name: "Correct Video Number",
@@ -184,13 +184,13 @@ function L(b) {
     passed: i,
     detail: i ? `Total parts detected/specified: ${r}` : "Total parts is undefined or 0"
   }), i || d.push(`${t}: Total parts count has not been detected or set.`);
-  const o = a.map((l) => l.partNumber), u = [];
+  const n = a.map((l) => l.partNumber), u = [];
   if (r > 0)
     for (let l = 1; l <= r; l++)
-      o.includes(l) || u.push(l);
+      n.includes(l) || u.push(l);
   else
     for (let l = 1; l <= a.length; l++)
-      o.includes(l) || u.push(l);
+      n.includes(l) || u.push(l);
   const p = u.length === 0 && a.length > 0 && r > 0;
   c.push({
     id: "check-missing",
@@ -198,26 +198,26 @@ function L(b) {
     passed: p,
     detail: p ? `All ${r} parts are present` : `MISSING: ${u.map((l) => `${t} P${l}`).join(", ")}`
   }), !p && u.length > 0 && d.push(`MISSING: ${u.map((l) => `${t} P${l}`).join(", ")}`);
-  const I = o.filter((l, E) => o.indexOf(l) !== E), g = Array.from(new Set(I)), S = g.length === 0;
+  const T = n.filter((l, E) => n.indexOf(l) !== E), g = Array.from(new Set(T)), S = g.length === 0;
   c.push({
     id: "check-duplicates",
     name: "No Duplicated Parts",
     passed: S,
     detail: S ? "Zero duplicate parts" : `DUPLICATE: ${g.map((l) => `${t} P${l}`).join(", ")}`
   }), S || d.push(`DUPLICATE: ${g.map((l) => `${t} P${l}`).join(", ")}`);
-  const T = [...a].sort((l, E) => l.partNumber - E.partNumber);
-  let P = !0;
-  for (let l = 0; l < T.length; l++)
-    if (T[l].partNumber !== l + 1) {
-      P = !1;
+  const P = [...a].sort((l, E) => l.partNumber - E.partNumber);
+  let w = !0;
+  for (let l = 0; l < P.length; l++)
+    if (P[l].partNumber !== l + 1) {
+      w = !1;
       break;
     }
   c.push({
     id: "check-sequential",
     name: "Sequential Ordering",
-    passed: P,
-    detail: P ? "Strict 1..N numerical ordering confirmed" : "Parts are out of order or contain gaps"
-  }), P || d.push(`${t}: Parts sequence is non-contiguous or contains gaps.`);
+    passed: w,
+    detail: w ? "Strict 1..N numerical ordering confirmed" : "Parts are out of order or contain gaps"
+  }), w || d.push(`${t}: Parts sequence is non-contiguous or contains gaps.`);
   const y = a.filter((l) => !l.heading || l.heading.trim().length === 0 || /^part\s*\d+$/i.test(l.heading.trim())), M = y.length === 0;
   c.push({
     id: "check-headings",
@@ -225,13 +225,13 @@ function L(b) {
     passed: M,
     detail: M ? "All parts have meaningful headings" : `${y.length} part(s) using generic or empty heading`
   }), M || e.push(`${t}: Parts ${y.map((l) => `P${l.partNumber}`).join(", ")} will be assigned intelligent content-based headings upon export.`);
-  const _ = a.filter((l) => !l.content || l.content.trim().length < 25), $ = _.length === 0;
+  const $ = a.filter((l) => !l.content || l.content.trim().length < 25), _ = $.length === 0;
   c.push({
     id: "check-content",
     name: "Complete Script Content",
-    passed: $,
-    detail: $ ? "All parts contain complete script prose" : `${_.length} part(s) contain empty or partial content`
-  }), $ || d.push(`${t}: Part(s) ${_.map((l) => `P${l.partNumber}`).join(", ")} have incomplete script content.`);
+    passed: _,
+    detail: _ ? "All parts contain complete script prose" : `${$.length} part(s) contain empty or partial content`
+  }), _ || d.push(`${t}: Part(s) ${$.map((l) => `P${l.partNumber}`).join(", ")} have incomplete script content.`);
   const h = a.some((l) => {
     const E = l.partNumber === 1, U = /^(?:#+\s*)?(?:video\s+|script\s+)?outline\b/i.test(l.content.trim());
     return E && U && l.content.trim().length < 400;
@@ -257,8 +257,8 @@ function L(b) {
     detail: f ? `All parts strictly isolated to ${t}` : `Cross-video parts detected: ${N.map((l) => l.explicitMarker || `P${l.partNumber}`).join(", ")}`
   }), f || d.push(`${t}: Foreign video parts detected: ${N.map((l) => l.explicitMarker || `P${l.partNumber}`).join(", ")}. Different videos must never be merged.`);
   const A = r > 0 && a.length === r && u.length === 0 && d.length === 0;
-  let w;
-  return A ? w = "TXT MERGE VERIFIED ✓" : u.length > 0 ? w = `MERGE INCOMPLETE — ${u.map((l) => `P${l}`).join(", ")} MISSING` : r > 0 && a.length < r ? w = `MERGE INCOMPLETE — ${a.length}/${r} Parts (${r - a.length} Missing)` : d.length > 0 ? w = "MERGE VALIDATION FAILED ✕" : w = "IN PROGRESS ⏳", {
+  let I;
+  return A ? I = "TXT MERGE VERIFIED ✓" : u.length > 0 ? I = `MERGE INCOMPLETE — ${u.map((l) => `P${l}`).join(", ")} MISSING` : r > 0 && a.length < r ? I = `MERGE INCOMPLETE — ${a.length}/${r} Parts (${r - a.length} Missing)` : d.length > 0 ? I = "MERGE VALIDATION FAILED ✕" : I = "IN PROGRESS ⏳", {
     valid: A,
     videoNumber: t,
     totalParts: r,
@@ -268,7 +268,7 @@ function L(b) {
     checks: c,
     errors: d,
     warnings: e,
-    statusLabel: w
+    statusLabel: I
   };
 }
 class j {
@@ -299,7 +299,7 @@ class j {
     this.setupListeners(), this.readyPromise = this.init();
   }
   setupListeners() {
-    chrome.runtime.onMessage.addListener((t, r, n) => (this.readyPromise.then(() => this.handleMessage(t, r)).then((c) => n(c)).catch((c) => n({ success: !1, error: c.message })), !0)), chrome.tabs.onRemoved.addListener((t) => {
+    chrome.runtime.onMessage.addListener((t, r, o) => (this.readyPromise.then(() => this.handleMessage(t, r)).then((c) => o(c)).catch((c) => o({ success: !1, error: c.message })), !0)), chrome.tabs.onRemoved.addListener((t) => {
       this.readyPromise.then(() => this.handleTabClosed(t));
     }), chrome.tabs.onUpdated.addListener((t, r) => {
       r.status === "complete" && this.readyPromise.then(() => this.handleTabLoaded(t));
@@ -315,7 +315,7 @@ class j {
     }), await this.reconcileAndInjectTabs();
   }
   async handleMessage(t, r) {
-    var n, c, d;
+    var o, c, d;
     switch (t.type) {
       case "GET_STATE":
         return { success: !0, state: this.state };
@@ -353,8 +353,8 @@ class j {
       case "SELECT_RANGE": {
         const { startIndex: e, endIndex: a } = t;
         return this.state.tabs.forEach((s, i) => {
-          const o = i + 1;
-          s.selected = s.index >= e && s.index <= a || o >= e && o <= a;
+          const n = i + 1;
+          s.selected = s.index >= e && s.index <= a || n >= e && n <= a;
         }), await this.persist(), { success: !0, tabs: this.state.tabs };
       }
       case "ASSIGN_TITLES":
@@ -434,8 +434,8 @@ class j {
       case "REFRESH_TAB": {
         const e = t.vNumber, a = this.state.tabs.find((s) => s.id === e);
         return a && a.chromeTabId && (await new Promise((i) => {
-          chrome.tabs.sendMessage(a.chromeTabId, { type: "PING" }, (o) => {
-            i(!chrome.runtime.lastError && o && o.pong);
+          chrome.tabs.sendMessage(a.chromeTabId, { type: "PING" }, (n) => {
+            i(!chrome.runtime.lastError && n && n.pong);
           }), setTimeout(() => i(!1), 200);
         }) ? chrome.tabs.sendMessage(a.chromeTabId, { type: "SCAN_DOM_NOW", tab: a }).catch(() => {
         }) : (await chrome.scripting.executeScript({
@@ -472,9 +472,9 @@ class j {
             i.status = "ready", i.parts = [], i.totalParts = 0, i.currentPart = 1, i.error = null, this.recalculateTabStatus(i), this.executionQueue.includes(i.id) || this.executionQueue.push(i.id);
           this.addLog("INFO", `Restarted ${s.length} selected tabs from Part 1.`), this.processQueue();
         } else if (e === "retry") {
-          const i = s.filter((o) => o.status === "error" || o.status === "incomplete");
-          for (const o of i)
-            o.error = null, this.recalculateTabStatus(o), this.executionQueue.includes(o.id) || this.executionQueue.push(o.id);
+          const i = s.filter((n) => n.status === "error" || n.status === "incomplete");
+          for (const n of i)
+            n.error = null, this.recalculateTabStatus(n), this.executionQueue.includes(n.id) || this.executionQueue.push(n.id);
           this.addLog("INFO", `Retried ${i.length} selected tabs.`), this.processQueue();
         } else if (e === "refresh") {
           for (const i of s)
@@ -504,17 +504,23 @@ class j {
       case "PUSH_TITLES_TO_CHATS":
       case "STAGE_PASTE_PROMPTS": {
         const e = t.target || "all", a = this.getTargetTabs(e);
-        let s = 0;
-        for (const i of a)
-          i.chromeTabId && (i.titleInjected = !!i.title, i.promptInjected = !!(i.masterPrompt || this.state.config.masterPrompt), this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, {
-            type: "PASTE_PROMPT_ONLY",
-            title: i.title,
-            masterPrompt: i.masterPrompt || this.state.config.masterPrompt,
-            vNumber: i.id
-          }).catch(() => {
-          }), chrome.tabs.sendMessage(i.chromeTabId, { type: "UPDATE_HUD", tab: i }).catch(() => {
-          }), s++);
-        return this.addLog("INFO", `Stage 1 / Push Titles: Injected into ${s} Qwen chat inputs (${e}).`), await this.persist(), { success: !0, count: s, tabs: this.state.tabs };
+        let s = 0, i = 0;
+        for (const n of a)
+          if (!(!n.chromeTabId || !n.title)) {
+            if (n.titlePushed && n.pushedTitleText === n.title) {
+              i++, this.addLog("INFO", `${n.id}: Title already pushed once ("${n.title}"). Skipping duplicate push.`, n.id);
+              continue;
+            }
+            n.titleInjected = !0, n.titlePushed = !0, n.pushedTitleText = n.title, n.promptInjected = !!(n.masterPrompt || this.state.config.masterPrompt), this.recalculateTabStatus(n), chrome.tabs.sendMessage(n.chromeTabId, {
+              type: "PASTE_PROMPT_ONLY",
+              title: n.title,
+              masterPrompt: n.masterPrompt || this.state.config.masterPrompt,
+              vNumber: n.id
+            }).catch(() => {
+            }), chrome.tabs.sendMessage(n.chromeTabId, { type: "UPDATE_HUD", tab: n }).catch(() => {
+            }), s++;
+          }
+        return this.addLog("INFO", `Push Titles: Pushed ${s} titles (${e}). Skipped ${i} already pushed.`), await this.persist(), { success: !0, count: s, skipped: i, tabs: this.state.tabs };
       }
       case "PUSH_PROMPT_TO_CHATS": {
         const e = t.target || "all", a = this.getTargetTabs(e);
@@ -536,14 +542,14 @@ class j {
         let s = 0;
         for (const i of a)
           if (i.chromeTabId && i.thumbnailId) {
-            const o = await R(i.thumbnailId);
-            if (o) {
-              const u = await this.blobToBase64(o.blob);
+            const n = await R(i.thumbnailId);
+            if (n) {
+              const u = await this.blobToBase64(n.blob);
               i.thumbnailPasted = !0, this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, {
                 type: "PASTE_THUMBNAIL_ONLY",
                 thumbnail: {
-                  name: o.asset.name || `${i.id}_thumb`,
-                  type: o.asset.type,
+                  name: n.asset.name || `${i.id}_thumb`,
+                  type: n.asset.type,
                   base64: u
                 },
                 vNumber: i.id
@@ -560,16 +566,16 @@ class j {
         let s = 0;
         for (const i of a) {
           if (!i.chromeTabId) continue;
-          let o = "", u = `${i.id}_script.txt`;
+          let n = "", u = `${i.id}_script.txt`;
           if (i.scriptId) {
             const p = await R(i.scriptId);
-            p && (o = await p.blob.text(), u = p.asset.name || u);
-          } else this.state.config.competitorScriptEnabled && ((n = this.state.config.competitorScriptText) != null && n.trim()) && (o = this.state.config.competitorScriptText.trim(), u = `${i.id}_Competitor_Script.txt`);
-          o && (i.scriptInjected = !0, this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, {
+            p && (n = await p.blob.text(), u = p.asset.name || u);
+          } else this.state.config.competitorScriptEnabled && ((o = this.state.config.competitorScriptText) != null && o.trim()) && (n = this.state.config.competitorScriptText.trim(), u = `${i.id}_Competitor_Script.txt`);
+          n && (i.scriptInjected = !0, this.recalculateTabStatus(i), chrome.tabs.sendMessage(i.chromeTabId, {
             type: "PASTE_SCRIPT_ONLY",
             script: {
               name: u,
-              content: o
+              content: n
             },
             vNumber: i.id
           }).catch(() => {
@@ -583,21 +589,21 @@ class j {
         let s = 0;
         for (const i of a)
           if (i.chromeTabId) {
-            if (i.titleInjected = !!i.title, i.promptInjected = !!(i.masterPrompt || this.state.config.masterPrompt), chrome.tabs.sendMessage(i.chromeTabId, {
+            if (i.title && (!i.titlePushed || i.pushedTitleText !== i.title) && (i.titleInjected = !0, i.titlePushed = !0, i.pushedTitleText = i.title, i.promptInjected = !!(i.masterPrompt || this.state.config.masterPrompt), chrome.tabs.sendMessage(i.chromeTabId, {
               type: "PASTE_PROMPT_ONLY",
               title: i.title,
               masterPrompt: i.masterPrompt || this.state.config.masterPrompt,
               vNumber: i.id
             }).catch(() => {
-            }), i.thumbnailId) {
-              const o = await R(i.thumbnailId);
-              if (o) {
-                const u = await this.blobToBase64(o.blob);
+            })), i.thumbnailId) {
+              const n = await R(i.thumbnailId);
+              if (n) {
+                const u = await this.blobToBase64(n.blob);
                 i.thumbnailPasted = !0, chrome.tabs.sendMessage(i.chromeTabId, {
                   type: "PASTE_THUMBNAIL_ONLY",
                   thumbnail: {
-                    name: o.asset.name || `${i.id}_thumb`,
-                    type: o.asset.type,
+                    name: n.asset.name || `${i.id}_thumb`,
+                    type: n.asset.type,
                     base64: u
                   },
                   vNumber: i.id
@@ -606,13 +612,13 @@ class j {
               }
             }
             if (i.scriptId) {
-              const o = await R(i.scriptId);
-              if (o) {
-                const u = await o.blob.text();
+              const n = await R(i.scriptId);
+              if (n) {
+                const u = await n.blob.text();
                 i.scriptInjected = !0, chrome.tabs.sendMessage(i.chromeTabId, {
                   type: "PASTE_SCRIPT_ONLY",
                   script: {
-                    name: o.asset.name || `${i.id}_script.txt`,
+                    name: n.asset.name || `${i.id}_script.txt`,
                     content: u
                   },
                   vNumber: i.id
@@ -631,7 +637,7 @@ class j {
       }
       case "CLEAR_TITLES":
         return this.state.tabs.forEach((e) => {
-          e.title = "", this.recalculateTabStatus(e);
+          e.title = "", e.titleInjected = !1, e.titlePushed = !1, e.pushedTitleText = void 0, this.recalculateTabStatus(e);
         }), this.addLog("INFO", "Cleared all assigned titles."), await this.persist(), { success: !0, tabs: this.state.tabs };
       case "CLEAR_PROMPT":
         return this.state.config.masterPrompt = "", this.state.tabs.forEach((e) => {
@@ -680,10 +686,10 @@ class j {
             }, this.state.tabs.push(a)), a.chromeTabId = e, this.addLog("INFO", `Linked ${a.id} to browser tab ${e} via explicit marker`, a.id), await this.persist(), { success: !0, tab: a };
           }
           if (a = this.state.tabs.find((s) => s.chromeTabId === e), !a) {
-            const s = await chrome.tabs.query({}), i = new Set(s.map((o) => o.id));
-            this.state.tabs.forEach((o) => {
-              o.chromeTabId && !i.has(o.chromeTabId) && (o.chromeTabId = null);
-            }), a = this.state.tabs.find((o) => !o.chromeTabId), a ? (a.chromeTabId = e, this.addLog("INFO", `Linked ${a.id} to browser tab ${e}`, a.id), await this.persist()) : this.state.tabs.length === 0 && (a = {
+            const s = await chrome.tabs.query({}), i = new Set(s.map((n) => n.id));
+            this.state.tabs.forEach((n) => {
+              n.chromeTabId && !i.has(n.chromeTabId) && (n.chromeTabId = null);
+            }), a = this.state.tabs.find((n) => !n.chromeTabId), a ? (a.chromeTabId = e, this.addLog("INFO", `Linked ${a.id} to browser tab ${e}`, a.id), await this.persist()) : this.state.tabs.length === 0 && (a = {
               id: "V1",
               index: 1,
               title: "",
@@ -712,10 +718,10 @@ class j {
         const e = (d = r.tab) == null ? void 0 : d.id, a = t.toVideoNumber || parseInt((t.toVNumber || "").replace(/\D/g, ""), 10);
         if (a && e) {
           const s = `V${a}`;
-          this.state.tabs.forEach((o) => {
-            o.chromeTabId === e && o.id !== s && (o.chromeTabId = null);
+          this.state.tabs.forEach((n) => {
+            n.chromeTabId === e && n.id !== s && (n.chromeTabId = null);
           });
-          let i = this.state.tabs.find((o) => o.id === s);
+          let i = this.state.tabs.find((n) => n.id === s);
           return i || (i = {
             id: s,
             index: a,
@@ -782,7 +788,7 @@ class j {
             (s) => s.partNumber <= e.totalParts || s.status === "done" && s.content && s.content.trim()
           ))), e.parts || (e.parts = []), t.missingParts && (e.missingParts = t.missingParts), t.duplicateParts && (e.duplicateParts = t.duplicateParts), t.detectedVideoNumber && (e.detectedVideoNumber = t.detectedVideoNumber), t.lifecycleStage && (e.lifecycleStage = t.lifecycleStage), t.liveDebugStatus && (e.liveDebugStatus = t.liveDebugStatus);
           for (const s of t.parts || []) {
-            const i = e.parts.find((o) => o.partNumber === s.partNumber);
+            const i = e.parts.find((n) => n.partNumber === s.partNumber);
             i ? (s.content && s.content.trim() && (i.content = s.content), s.heading && (i.heading = s.heading), s.explicitMarker && (i.explicitMarker = s.explicitMarker), s.videoNumber && (i.videoNumber = s.videoNumber), i.status === "done" && s.status !== "done" || (i.status = s.status)) : e.parts.push({ ...s });
           }
           e.parts.sort((s, i) => s.partNumber - i.partNumber);
@@ -802,7 +808,7 @@ class j {
       case "CONTENT_PART_COMPLETED": {
         const e = this.state.tabs.find((a) => a.id === t.vNumber);
         if (e) {
-          let a = e.parts.find((o) => o.partNumber === t.partNumber);
+          let a = e.parts.find((n) => n.partNumber === t.partNumber);
           a ? (a.status = "done", t.content && t.content.trim() && (a.content = t.content), t.heading && (a.heading = t.heading), t.explicitMarker && (a.explicitMarker = t.explicitMarker), t.videoNumber && (a.videoNumber = t.videoNumber), a.extractedAt = Date.now()) : (a = {
             partNumber: t.partNumber,
             label: t.explicitMarker || `${e.id} P${t.partNumber}`,
@@ -813,8 +819,8 @@ class j {
             content: t.content,
             extractedAt: Date.now(),
             downloaded: !1
-          }, e.parts.push(a)), e.parts.sort((o, u) => o.partNumber - u.partNumber);
-          const s = e.parts.find((o) => o.partNumber === t.partNumber + 1);
+          }, e.parts.push(a)), e.parts.sort((n, u) => n.partNumber - u.partNumber);
+          const s = e.parts.find((n) => n.partNumber === t.partNumber + 1);
           s && s.status === "waiting" && (s.status = "ready");
           const i = L(e);
           e.mergeValidationStatus = i.valid ? "valid" : "invalid", i.valid ? (e.status = "completed", this.addLog(
@@ -845,47 +851,47 @@ class j {
    * Duplicates tabs according to a specified Video ID range (e.g. V20 to V25) or count.
    * If startVideoId and endVideoId are provided, tabs strictly receive those IDs (e.g. V20, V21, V22...).
    */
-  async duplicateChats(t, r, n, c, d) {
+  async duplicateChats(t, r, o, c, d) {
     const e = !!(d && d.length > 0), a = e ? Array.from(new Set(d)).sort((h, m) => h - m) : (() => {
-      const h = n && n > 0 ? n : 1, m = c && c >= h ? c : h + Math.max(1, t) - 1, N = [];
+      const h = o && o > 0 ? o : 1, m = c && c >= h ? c : h + Math.max(1, t) - 1, N = [];
       for (let f = h; f <= m; f++) N.push(f);
       return N;
     })();
-    if (!e && n && c && n > c)
+    if (!e && o && c && o > c)
       return {
         success: !1,
-        error: `Validation Error: Start Video ID (V${n}) cannot be greater than End Video ID (V${c}).`
+        error: `Validation Error: Start Video ID (V${o}) cannot be greater than End Video ID (V${c}).`
       };
     if (a.length === 0)
       return { success: !1, error: "Invalid Video ID range. Must create at least 1 tab." };
-    const s = a[0], i = a[a.length - 1], o = new Set(a);
-    this.state.tabs = this.state.tabs.filter((h) => o.has(h.index));
+    const s = a[0], i = a[a.length - 1], n = new Set(a);
+    this.state.tabs = this.state.tabs.filter((h) => n.has(h.index));
     const p = (await chrome.tabs.query({})).filter((h) => h.url && this.isMetaUrl(h.url)), g = (await chrome.tabs.query({ active: !0, currentWindow: !0 }))[0];
-    let S = "https://www.meta.ai/", T = null;
-    g && g.url && this.isMetaUrl(g.url) ? (T = g, S = g.url) : p.length > 0 && (T = p[0], S = p[0].url || "https://www.meta.ai/");
-    let P = (r || "").trim();
-    if (!P && T && T.id)
+    let S = "https://www.meta.ai/", P = null;
+    g && g.url && this.isMetaUrl(g.url) ? (P = g, S = g.url) : p.length > 0 && (P = p[0], S = p[0].url || "https://www.meta.ai/");
+    let w = (r || "").trim();
+    if (!w && P && P.id)
       try {
-        const h = await chrome.tabs.sendMessage(T.id, { type: "GET_CURRENT_INPUT_TEXT" });
-        h && h.text && (P = h.text.trim());
+        const h = await chrome.tabs.sendMessage(P.id, { type: "GET_CURRENT_INPUT_TEXT" });
+        h && h.text && (w = h.text.trim());
       } catch {
       }
-    P || (P = this.state.config.initialPrompt || "My Version of Title is:"), this.state.config.initialPrompt = P;
-    const y = [], M = T && T.id ? this.state.tabs.some((h) => h.chromeTabId === T.id) : !0;
-    let _ = !1;
+    w || (w = this.state.config.initialPrompt || "My Version of Title is:"), this.state.config.initialPrompt = w;
+    const y = [], M = P && P.id ? this.state.tabs.some((h) => h.chromeTabId === P.id) : !0;
+    let $ = !1;
     for (const h of a) {
-      const m = `V${h}`, N = this.state.tabs.findIndex((w) => w.id === m || w.index === h);
+      const m = `V${h}`, N = this.state.tabs.findIndex((I) => I.id === m || I.index === h);
       let f = null;
-      if (!_ && !M && T && T.id)
-        f = T.id, _ = !0, this.addLog("INFO", `${m} assigned to active Qwen tab (Tab ID: ${f}).`, m);
+      if (!$ && !M && P && P.id)
+        f = P.id, $ = !0, this.addLog("INFO", `${m} assigned to active Qwen tab (Tab ID: ${f}).`, m);
       else
         try {
           f = (await chrome.tabs.create({
             url: S,
             active: !1
           })).id || null, this.addLog("INFO", `${m} opened (Meta Tab ID: ${f}).`, m);
-        } catch (w) {
-          this.addLog("ERROR", `Failed to open Meta tab for ${m}: ${w.message}`, m);
+        } catch (I) {
+          this.addLog("ERROR", `Failed to open Meta tab for ${m}: ${I.message}`, m);
         }
       const A = {
         id: m,
@@ -895,7 +901,7 @@ class j {
         metaUrl: S,
         status: "incomplete",
         selected: !0,
-        initialMessage: P,
+        initialMessage: w,
         title: "",
         masterPrompt: this.state.config.masterPrompt,
         thumbnailStatus: "none",
@@ -908,39 +914,42 @@ class j {
         lastUpdated: Date.now()
       };
       N >= 0 ? this.state.tabs[N] = A : this.state.tabs.push(A), y.push(A), f && (chrome.tabs.sendMessage(f, { type: "UPDATE_HUD", tab: A }).catch(() => {
-      }), P && this.scheduleInitialTextInjection(f, P));
+      }), w && this.scheduleInitialTextInjection(f, w));
     }
     this.state.tabs.sort((h, m) => h.index - m.index);
-    const $ = e ? a.map((h) => `V${h}`).join(", ") : `V${s}–V${i}`;
-    return this.addLog("SUCCESS", `Duplicated ${y.length} tabs for ${$}.`), await this.persist(), { success: !0, count: y.length, range: $, tabs: this.state.tabs };
+    const _ = e ? a.map((h) => `V${h}`).join(", ") : `V${s}–V${i}`;
+    return this.addLog("SUCCESS", `Duplicated ${y.length} tabs for ${_}.`), await this.persist(), { success: !0, count: y.length, range: _, tabs: this.state.tabs };
   }
   /**
    * Assigns titles to tabs sequentially or by explicit V-number marker.
    * Cuts off any excess titles beyond the selected range (below START or above END).
    */
-  async assignTitles(t, r, n) {
+  async assignTitles(t, r, o) {
     if (t.length === 0)
       return { success: !1, error: "No titles provided." };
-    const c = r || 1, d = n || c + t.length - 1, e = this.state.tabs.filter((o, u) => {
+    const c = r || 1, d = o || c + t.length - 1, e = this.state.tabs.filter((n, u) => {
       const p = u + 1;
-      return o.index >= c && o.index <= d || p >= c && p <= d;
+      return n.index >= c && n.index <= d || p >= c && p <= d;
     }), a = /* @__PURE__ */ new Set(), s = [];
-    for (const o of t) {
-      const u = o.trim().match(/^(?:\[?\s*[vV](\d+)\s*\]?|Video\s*(\d+))[\s.:\-_–—]*/i);
+    for (const n of t) {
+      const u = n.trim().match(/^(?:\[?\s*[vV](\d+)\s*\]?|Video\s*(\d+))[\s.:\-_–—]*/i);
       if (u) {
-        const p = parseInt(u[1] || u[2], 10), I = e.find(
+        const p = parseInt(u[1] || u[2], 10), T = e.find(
           (g) => (g.index === p || g.id === `V${p}`) && !a.has(g.id)
         );
-        if (I) {
-          I.title = o, this.recalculateTabStatus(I), this.addLog("INFO", `Title assigned to ${I.id}: "${I.title}"`, I.id), a.add(I.id);
+        if (T) {
+          T.title !== n && (T.title = n, T.titleInjected = !1, T.titlePushed = !1, T.pushedTitleText = void 0), this.recalculateTabStatus(T), this.addLog("INFO", `Title assigned to ${T.id}: "${T.title}"`, T.id), a.add(T.id);
           continue;
         }
       }
-      s.push(o);
+      s.push(n);
     }
     let i = 0;
-    for (const o of e)
-      !a.has(o.id) && i < s.length && (o.title = s[i], this.recalculateTabStatus(o), this.addLog("INFO", `Title assigned to ${o.id}: "${o.title}"`, o.id), a.add(o.id), i++);
+    for (const n of e)
+      if (!a.has(n.id) && i < s.length) {
+        const u = s[i];
+        n.title !== u && (n.title = u, n.titleInjected = !1, n.titlePushed = !1, n.pushedTitleText = void 0), this.recalculateTabStatus(n), this.addLog("INFO", `Title assigned to ${n.id}: "${n.title}"`, n.id), a.add(n.id), i++;
+      }
     return this.addLog("INFO", `Assigned ${a.size} titles to range V${c}–V${d}.`), await this.persist(), { success: !0, tabs: this.state.tabs, assignedCount: a.size };
   }
   /**
@@ -957,21 +966,21 @@ class j {
     for (const s of r) {
       if (!s.chromeTabId) continue;
       const i = this.state.config.masterPrompt || "";
-      if (!s.masterPrompt && i && (s.masterPrompt = i), s.title && (!s.titleInjected || !s.promptInjected) && (s.titleInjected = !0, s.promptInjected = !0, chrome.tabs.sendMessage(s.chromeTabId, {
+      if (!s.masterPrompt && i && (s.masterPrompt = i), s.title && (!s.titlePushed || s.pushedTitleText !== s.title) && (s.titleInjected = !0, s.titlePushed = !0, s.pushedTitleText = s.title, s.promptInjected = !0, chrome.tabs.sendMessage(s.chromeTabId, {
         type: "PASTE_PROMPT_ONLY",
         title: s.title,
         masterPrompt: s.masterPrompt || i,
         vNumber: s.id
       }).catch(() => {
       })), s.thumbnailId && !s.thumbnailPasted) {
-        const o = await R(s.thumbnailId);
-        if (o) {
-          const u = await this.blobToBase64(o.blob);
+        const n = await R(s.thumbnailId);
+        if (n) {
+          const u = await this.blobToBase64(n.blob);
           s.thumbnailPasted = !0, chrome.tabs.sendMessage(s.chromeTabId, {
             type: "PASTE_THUMBNAIL_ONLY",
             thumbnail: {
-              name: o.asset.name || `${s.id}_thumb`,
-              type: o.asset.type,
+              name: n.asset.name || `${s.id}_thumb`,
+              type: n.asset.type,
               base64: u
             },
             vNumber: s.id
@@ -980,16 +989,16 @@ class j {
         }
       }
       if (!s.scriptInjected) {
-        let o = "", u = `${s.id}_script.txt`;
+        let n = "", u = `${s.id}_script.txt`;
         if (s.scriptId) {
           const p = await R(s.scriptId);
-          p && (o = await p.blob.text(), u = p.asset.name || u);
-        } else this.state.config.competitorScriptEnabled && ((a = this.state.config.competitorScriptText) != null && a.trim()) && (o = this.state.config.competitorScriptText.trim(), u = `${s.id}_Competitor_Script.txt`);
-        o && (s.scriptInjected = !0, chrome.tabs.sendMessage(s.chromeTabId, {
+          p && (n = await p.blob.text(), u = p.asset.name || u);
+        } else this.state.config.competitorScriptEnabled && ((a = this.state.config.competitorScriptText) != null && a.trim()) && (n = this.state.config.competitorScriptText.trim(), u = `${s.id}_Competitor_Script.txt`);
+        n && (s.scriptInjected = !0, chrome.tabs.sendMessage(s.chromeTabId, {
           type: "PASTE_SCRIPT_ONLY",
           script: {
             name: u,
-            content: o
+            content: n
           },
           vNumber: s.id
         }).catch(() => {
@@ -998,15 +1007,15 @@ class j {
       this.recalculateTabStatus(s), chrome.tabs.sendMessage(s.chromeTabId, { type: "UPDATE_HUD", tab: s }).catch(() => {
       });
     }
-    const n = [], c = (this.state.config.scriptMode || "original") === "original", d = !c && !!this.state.config.competitorScriptEnabled, e = !!(this.state.config.competitorScriptText && this.state.config.competitorScriptText.trim());
+    const o = [], c = (this.state.config.scriptMode || "original") === "original", d = !c && !!this.state.config.competitorScriptEnabled, e = !!(this.state.config.competitorScriptText && this.state.config.competitorScriptText.trim());
     for (const s of r) {
       const i = [];
       s.title || i.push("Title not assigned"), !s.masterPrompt && !this.state.config.masterPrompt && i.push("Master Prompt missing");
-      const o = s.thumbnailId || s.thumbnailPasted || s.thumbnailStatus === "assigned", u = c || !d || s.scriptOptional || e || s.scriptId || s.scriptInjected || s.scriptStatus === "assigned";
-      o || i.push("Thumbnail image not uploaded or pasted into chat"), u || i.push("Competitor script not provided (paste script or switch to Original Script Mode)"), i.length > 0 ? (s.status = "incomplete", n.push({ id: s.id, missing: i })) : s.status = "ready";
+      const n = s.thumbnailId || s.thumbnailPasted || s.thumbnailStatus === "assigned", u = c || !d || s.scriptOptional || e || s.scriptId || s.scriptInjected || s.scriptStatus === "assigned";
+      n || i.push("Thumbnail image not uploaded or pasted into chat"), u || i.push("Competitor script not provided (paste script or switch to Original Script Mode)"), i.length > 0 ? (s.status = "incomplete", o.push({ id: s.id, missing: i })) : s.status = "ready";
     }
-    if (n.length > 0) {
-      const s = n.map((o) => `${o.id}: [${o.missing.join("; ")}]`).join(`
+    if (o.length > 0) {
+      const s = o.map((n) => `${n.id}: [${n.missing.join("; ")}]`).join(`
 `), i = c ? `Required assets missing for execution:
 
 ${s}
@@ -1016,10 +1025,10 @@ Please assign Titles, Master Prompt, and Thumbnails before running.` : `Required
 ${s}
 
 Please upload Thumbnails and Competitor Scripts in the dashboard and push them to the Qwen chats before running.`;
-      return this.addLog("ERROR", `Cannot run: ${n.length} tabs have missing files.`), await this.persist(), {
+      return this.addLog("ERROR", `Cannot run: ${o.length} tabs have missing files.`), await this.persist(), {
         success: !1,
         error: i,
-        invalidTabs: n
+        invalidTabs: o
       };
     }
     return r.forEach((s) => {
@@ -1048,8 +1057,8 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
           await new Promise((c) => setTimeout(c, 1e3)), this.state.activeExecutionCount++, this.runSingleTab(r).finally(() => {
             this.state.activeExecutionCount--, this.processQueue();
           });
-          const n = Math.floor(5e3 + Math.random() * 1e4);
-          this.addLog("INFO", `Human Pacing: Waiting ${(n / 1e3).toFixed(1)}s before navigating to next tab...`, t), await new Promise((c) => setTimeout(c, n));
+          const o = Math.floor(5e3 + Math.random() * 1e4);
+          this.addLog("INFO", `Human Pacing: Waiting ${(o / 1e3).toFixed(1)}s before navigating to next tab...`, t), await new Promise((c) => setTimeout(c, o));
         }
       } finally {
         this.isProcessingQueue = !1;
@@ -1081,7 +1090,7 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
    * Retries execution for a failed tab.
    */
   async retryTab(t) {
-    const r = this.state.tabs.find((n) => n.id === t);
+    const r = this.state.tabs.find((o) => o.id === t);
     return r ? (r.status = "ready", r.error = null, this.executionQueue.includes(t) || this.executionQueue.push(t), this.addLog("INFO", `Retry queued for ${t}.`, t), this.processQueue(), await this.persist(), { success: !0 }) : { success: !1, error: `Tab ${t} not found.` };
   }
   /**
@@ -1089,98 +1098,98 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
    * Switches to the tab, then inserts and runs that part exactly like normal generation.
    */
   async retryPart(t, r) {
-    const n = this.state.tabs.find((d) => d.id === t);
-    if (!n || !n.chromeTabId) return { success: !1, error: `Tab ${t} not found or closed.` };
-    const c = n.parts.find((d) => d.partNumber === r);
+    const o = this.state.tabs.find((d) => d.id === t);
+    if (!o || !o.chromeTabId) return { success: !1, error: `Tab ${t} not found or closed.` };
+    const c = o.parts.find((d) => d.partNumber === r);
     if (!c) return { success: !1, error: `Part ${r} not found in ${t}.` };
-    this.addLog("INFO", `Retrying ${t} P${r}...`, t), c.status = "generating", n.status = "running", n.currentPart = r, await this.persist();
+    this.addLog("INFO", `Retrying ${t} P${r}...`, t), c.status = "generating", o.status = "running", o.currentPart = r, await this.persist();
     try {
-      await chrome.tabs.update(n.chromeTabId, { active: !0 });
+      await chrome.tabs.update(o.chromeTabId, { active: !0 });
     } catch {
     }
     try {
-      return await chrome.tabs.sendMessage(n.chromeTabId, {
+      return await chrome.tabs.sendMessage(o.chromeTabId, {
         type: "EXECUTE_NEXT_PART_ACTION",
         partNumber: r,
-        totalParts: n.totalParts || 0,
-        wordCount: n.partWordCount || this.state.config.partWordCount || 4e3
+        totalParts: o.totalParts || 0,
+        wordCount: o.partWordCount || this.state.config.partWordCount || 4e3
       }), { success: !0 };
     } catch (d) {
-      return c.status = "error", n.status = "error", this.addLog("ERROR", `Retry P${r} failed for ${t}: ${d.message}`, t), await this.persist(), { success: !1, error: d.message };
+      return c.status = "error", o.status = "error", this.addLog("ERROR", `Retry P${r} failed for ${t}: ${d.message}`, t), await this.persist(), { success: !1, error: d.message };
     }
   }
   /**
    * Triggers content script to insert next part.
    */
   async insertNextPart(t, r) {
-    const n = this.state.tabs.find((s) => s.id === t);
-    if (!n || !n.chromeTabId) return { success: !1, error: "Tab not found." };
+    const o = this.state.tabs.find((s) => s.id === t);
+    if (!o || !o.chromeTabId) return { success: !1, error: "Tab not found." };
     try {
-      await chrome.tabs.update(n.chromeTabId, { active: !0 });
-      const s = await chrome.tabs.get(n.chromeTabId);
+      await chrome.tabs.update(o.chromeTabId, { active: !0 });
+      const s = await chrome.tabs.get(o.chromeTabId);
       s.windowId && await chrome.windows.update(s.windowId, { focused: !0 });
     } catch {
     }
     if (await new Promise((s) => setTimeout(s, 600)), !await new Promise((s) => {
-      chrome.tabs.sendMessage(n.chromeTabId, { type: "PING" }, (i) => {
+      chrome.tabs.sendMessage(o.chromeTabId, { type: "PING" }, (i) => {
         s(!chrome.runtime.lastError && i && i.pong);
       }), setTimeout(() => s(!1), 300);
     }))
       try {
         await chrome.scripting.executeScript({
-          target: { tabId: n.chromeTabId },
+          target: { tabId: o.chromeTabId },
           files: ["content.js"]
         }), await new Promise((s) => setTimeout(s, 800));
       } catch {
       }
-    n.status = "running", n.currentPart = r, n.error = null;
-    let d = n.parts.find((s) => s.partNumber === r);
+    o.status = "running", o.currentPart = r, o.error = null;
+    let d = o.parts.find((s) => s.partNumber === r);
     if (d)
       d.status = "generating";
     else {
-      const s = parseInt(n.id.replace(/\D/g, ""), 10) || 1;
-      n.parts.push({
+      const s = parseInt(o.id.replace(/\D/g, ""), 10) || 1;
+      o.parts.push({
         partNumber: r,
-        label: `${n.id} P${r}`,
-        explicitMarker: `${n.id} P${r}`,
+        label: `${o.id} P${r}`,
+        explicitMarker: `${o.id} P${r}`,
         videoNumber: s,
         status: "generating",
         content: "",
         downloaded: !1
       });
     }
-    for (const s of n.parts)
+    for (const s of o.parts)
       s.partNumber !== r && s.status === "generating" && (s.status = "waiting");
-    this.addLog("INFO", `${n.id}: Writing Part ${r} Script...`, n.id), await this.persist();
-    const a = (n.scriptMode === "original" || (this.state.config.scriptMode || "original") === "original") && n.outlinePartInstructions ? n.outlinePartInstructions[r] : void 0;
+    this.addLog("INFO", `${o.id}: Writing Part ${r} Script...`, o.id), await this.persist();
+    const a = (o.scriptMode === "original" || (this.state.config.scriptMode || "original") === "original") && o.outlinePartInstructions ? o.outlinePartInstructions[r] : void 0;
     try {
-      const s = await chrome.tabs.sendMessage(n.chromeTabId, {
+      const s = await chrome.tabs.sendMessage(o.chromeTabId, {
         type: "EXECUTE_NEXT_PART_ACTION",
         partNumber: r,
-        totalParts: n.totalParts || 0,
-        wordCount: n.partWordCount || this.state.config.partWordCount || 4e3,
+        totalParts: o.totalParts || 0,
+        wordCount: o.partWordCount || this.state.config.partWordCount || 4e3,
         outlineInstruction: a
       });
-      return s && s.error ? (n.status = "error", n.error = O("CUSTOM", {
+      return s && s.error ? (o.status = "error", o.error = O("CUSTOM", {
         title: `Part ${r} Request Failed`,
         problem: s.error,
-        vNumber: n.id
-      }), this.addLog("ERROR", `${n.id} Part ${r} request failed: ${s.error}`, n.id, n.error), await this.persist(), { success: !1, error: s.error }) : { success: !0 };
+        vNumber: o.id
+      }), this.addLog("ERROR", `${o.id} Part ${r} request failed: ${s.error}`, o.id, o.error), await this.persist(), { success: !1, error: s.error }) : { success: !0 };
     } catch (s) {
-      return n.status = "error", n.error = O("CUSTOM", {
+      return o.status = "error", o.error = O("CUSTOM", {
         title: `Part ${r} Request Failed`,
         problem: s.message,
-        vNumber: n.id
-      }), this.addLog("ERROR", `${n.id} Part ${r} error: ${s.message}`, n.id, n.error), await this.persist(), { success: !1, error: s.message };
+        vNumber: o.id
+      }), this.addLog("ERROR", `${o.id} Part ${r} error: ${s.message}`, o.id, o.error), await this.persist(), { success: !1, error: s.message };
     }
   }
   /**
    * Downloads a single generated part text file via chrome.downloads API.
    */
   async downloadPartFile(t, r) {
-    const n = this.state.tabs.find((a) => a.id === t);
-    if (!n) return { success: !1, error: "Tab not found." };
-    const c = n.parts.find((a) => a.partNumber === r);
+    const o = this.state.tabs.find((a) => a.id === t);
+    if (!o) return { success: !1, error: "Tab not found." };
+    const c = o.parts.find((a) => a.partNumber === r);
     if (!c || !c.content)
       return { success: !1, error: `Part ${r} content not available.` };
     const d = `${t} P${r}.txt`, e = `data:text/plain;charset=utf-8,${encodeURIComponent(c.content)}`;
@@ -1197,14 +1206,14 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
   }
   getTargetTabs(t) {
     const r = t || "all";
-    return this.state.tabs.filter((n) => n.chromeTabId ? r === "all" ? !0 : r === "selected" ? n.selected : n.id === r : !1);
+    return this.state.tabs.filter((o) => o.chromeTabId ? r === "all" ? !0 : r === "selected" ? o.selected : o.id === r : !1);
   }
   handleTabClosed(t) {
-    const r = this.state.tabs.find((n) => n.chromeTabId === t);
+    const r = this.state.tabs.find((o) => o.chromeTabId === t);
     r && (r.chromeTabId = null, r.status = "error", r.error = O("TAB_NOT_FOUND", { vNumber: r.id }), this.addLog("WARNING", `${r.id} browser tab was closed.`, r.id, r.error), this.persist());
   }
   handleTabLoaded(t) {
-    const r = this.state.tabs.find((n) => n.chromeTabId === t);
+    const r = this.state.tabs.find((o) => o.chromeTabId === t);
     r && r.initialMessage && !r.initialMessageInjected && r.status !== "running" && r.status !== "completed" && (r.initialMessageInjected = !0, this.scheduleInitialTextInjection(t, r.initialMessage));
   }
   scheduleInitialTextInjection(t, r) {
@@ -1220,8 +1229,8 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
   }
   reindexTabs() {
     this.state.tabs.forEach((t, r) => {
-      const n = r + 1;
-      t.index = n, t.id = `V${n}`, t.chromeTabId && chrome.tabs.sendMessage(t.chromeTabId, {
+      const o = r + 1;
+      t.index = o, t.id = `V${o}`, t.chromeTabId && chrome.tabs.sendMessage(t.chromeTabId, {
         type: "UPDATE_HUD",
         tab: t
       }).catch(() => {
@@ -1230,17 +1239,17 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
   }
   recalculateTabStatus(t) {
     if (t.status === "running" || t.status === "completed") return;
-    const r = !!t.title, n = !!t.masterPrompt, c = t.thumbnailStatus !== "none" || t.thumbnailPasted || !!t.thumbnailId, d = t.scriptMode === "original" || (this.state.config.scriptMode || "original") === "original", e = !d && !!this.state.config.competitorScriptEnabled, a = !!(this.state.config.competitorScriptText && this.state.config.competitorScriptText.trim()), s = d || !e || t.scriptOptional || a || t.scriptStatus !== "none" || t.scriptInjected || !!t.scriptId;
-    r && n && c && s ? (t.status = "ready", t.error = null) : t.status = "incomplete";
+    const r = !!t.title, o = !!t.masterPrompt, c = t.thumbnailStatus !== "none" || t.thumbnailPasted || !!t.thumbnailId, d = t.scriptMode === "original" || (this.state.config.scriptMode || "original") === "original", e = !d && !!this.state.config.competitorScriptEnabled, a = !!(this.state.config.competitorScriptText && this.state.config.competitorScriptText.trim()), s = d || !e || t.scriptOptional || a || t.scriptStatus !== "none" || t.scriptInjected || !!t.scriptId;
+    r && o && c && s ? (t.status = "ready", t.error = null) : t.status = "incomplete";
   }
-  addLog(t, r, n, c) {
+  addLog(t, r, o, c) {
     const d = /* @__PURE__ */ new Date(), e = d.toTimeString().split(" ")[0], a = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       timeStr: e,
       isoTime: d.toISOString(),
       level: t,
       message: r,
-      vNumber: n,
+      vNumber: o,
       errorDetails: c
     };
     this.state.logs.unshift(a), this.state.logs.length > 500 && this.state.logs.pop();
@@ -1252,7 +1261,7 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
   async resyncAllTabs() {
     this.addLog("INFO", "Starting parallel resync across all managed tabs...");
     const t = await chrome.tabs.query({}), r = new Set(t.map((d) => d.id).filter((d) => d !== void 0));
-    let n = 0;
+    let o = 0;
     const c = this.state.tabs.map(async (d) => {
       if (!(!d.chromeTabId || !r.has(d.chromeTabId)))
         try {
@@ -1268,7 +1277,7 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
           if (a && Array.isArray(a)) {
             d.parts = a, e.tab && (d.currentPart = e.tab.currentPart || d.currentPart, d.totalParts = e.tab.totalParts || d.totalParts, e.tab.outlineDetected && (d.outlineDetected = !0), e.tab.outlineContent && (d.outlineContent = e.tab.outlineContent), e.tab.detectedVideoNumber && (d.detectedVideoNumber = e.tab.detectedVideoNumber));
             const s = L(d);
-            d.mergeValidationStatus = s.valid ? "valid" : "invalid", s.valid ? d.status = "completed" : this.recalculateTabStatus(d), d.lastUpdated = Date.now(), n++, chrome.tabs.sendMessage(d.chromeTabId, {
+            d.mergeValidationStatus = s.valid ? "valid" : "invalid", s.valid ? d.status = "completed" : this.recalculateTabStatus(d), d.lastUpdated = Date.now(), o++, chrome.tabs.sendMessage(d.chromeTabId, {
               type: "UPDATE_HUD",
               tab: d
             }).catch(() => {
@@ -1278,7 +1287,7 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
           console.warn(`Resync error for ${d.id}:`, e);
         }
     });
-    return await Promise.all(c), await this.persist(), this.addLog("SUCCESS", `Resynced ${n} managed tabs from live DOM.`), this.state.tabs;
+    return await Promise.all(c), await this.persist(), this.addLog("SUCCESS", `Resynced ${o} managed tabs from live DOM.`), this.state.tabs;
   }
   /**
    * Reconciles all open browser tabs, links open Qwen tabs to VTabs,
@@ -1291,10 +1300,10 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
       this.state.tabs.forEach((c) => {
         c.chromeTabId && !r.has(c.chromeTabId) && (c.chromeTabId = null);
       });
-      const n = t.filter(
+      const o = t.filter(
         (c) => c.id && c.url && this.isQwenUrl(c.url)
       );
-      for (const c of n) {
+      for (const c of o) {
         if (!c.id) continue;
         let d = this.state.tabs.find((a) => a.chromeTabId === c.id);
         if (d || (d = this.state.tabs.find((a) => !a.chromeTabId), d && (d.chromeTabId = c.id)), await new Promise((a) => {
@@ -1341,8 +1350,8 @@ Please upload Thumbnails and Competitor Scripts in the dashboard and push them t
   }
   async blobToBase64(t) {
     return new Promise((r) => {
-      const n = new FileReader();
-      n.onloadend = () => r(n.result), n.readAsDataURL(t);
+      const o = new FileReader();
+      o.onloadend = () => r(o.result), o.readAsDataURL(t);
     });
   }
 }

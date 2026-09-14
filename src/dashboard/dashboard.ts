@@ -326,7 +326,8 @@ class DashboardController {
       chrome.runtime.sendMessage({ type: 'PUSH_TITLES_TO_CHATS', target: 'selected' }, (res) => {
         if (res?.success) {
           this.syncState();
-          alert(`Pushed assigned titles to ${res.count} selected Meta.ai tabs!`);
+          const skippedMsg = res.skipped ? ` (${res.skipped} already pushed and skipped)` : '';
+          alert(`Pushed assigned titles to ${res.count} selected Meta.ai tabs!${skippedMsg}`);
         }
       });
     });
@@ -666,7 +667,8 @@ class DashboardController {
       chrome.runtime.sendMessage({ type: 'PUSH_TITLES_TO_CHATS', target: 'all' }, (res) => {
         if (res?.success) {
           this.syncState();
-          alert(`Pushed assigned titles to ${res.count} Meta.ai chat inputs!`);
+          const skippedMsg = res.skipped ? ` (${res.skipped} already pushed and skipped)` : '';
+          alert(`Pushed assigned titles to ${res.count} Meta.ai chat inputs!${skippedMsg}`);
         }
       });
     });
@@ -1438,6 +1440,25 @@ class DashboardController {
       const hasScript = tab.scriptStatus !== 'none';
       const all4InChat = Boolean(tab.titleInjected && tab.promptInjected && tab.thumbnailPasted && tab.scriptInjected);
 
+      const donePartNums = new Set(
+        tab.parts
+          .filter((p) => p.status === 'done' && Boolean(p.content && p.content.trim().length > 0))
+          .map((p) => p.partNumber)
+      );
+      const hasCompetitor = tab.scriptStatus === 'assigned' || tab.scriptStatus === 'uploaded' || Boolean(tab.scriptInjected);
+      let nextPartNum: number | null = null;
+      if (donePartNums.size === 0) {
+        if (hasCompetitor || tab.outlineStatus === 'completed' || tab.outlineDetected) {
+          nextPartNum = 1;
+        }
+      } else {
+        const maxDone = Math.max(...Array.from(donePartNums));
+        const total = tab.totalParts || 0;
+        if (total === 0 || maxDone < total) {
+          nextPartNum = maxDone + 1;
+        }
+      }
+
       return `
         <tr>
           <td>
@@ -1500,7 +1521,11 @@ class DashboardController {
             ${tab.totalParts > 0 ? `${tab.parts.filter((p) => p.status === 'done' && Boolean(p.content && p.content.trim().length > 0)).length}/${tab.totalParts}` : '-'}
           </td>
           <td>
-            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+              ${nextPartNum ? `
+                <button class="btn btn-sm btn-primary btn-table-insert-part" data-v="${tab.id}" data-part="${nextPartNum}" title="Request Part ${nextPartNum} for ${tab.id}">✍️ P${nextPartNum}</button>
+                <button class="btn btn-sm btn-secondary btn-copy-write-part" data-prompt="Write Part ${nextPartNum}" title="Copy 'Write Part ${nextPartNum}' to clipboard">📋</button>
+              ` : ''}
               <button class="btn btn-sm btn-primary btn-table-push-all" data-id="${tab.id}" title="Push all 4 assets (Title, Prompt, Thumb, Script) to this tab">⚡ Push</button>
               <button class="btn btn-sm btn-table-focus" data-tabid="${tab.chromeTabId}" title="Bring Meta.ai tab to front">Focus</button>
               ${tab.status === 'running' ? `<button class="btn btn-sm btn-warning btn-table-cancel" data-id="${tab.id}" title="Cancel execution">Cancel</button>` : ''}
@@ -1515,6 +1540,31 @@ class DashboardController {
     }).join('');
 
     // Attach row events
+    tbody.querySelectorAll('.btn-table-insert-part').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLButtonElement;
+        const v = target.dataset.v;
+        const part = parseInt(target.dataset.part || '1', 10);
+        if (v) {
+          target.disabled = true;
+          target.innerHTML = `⏳ P${part}`;
+          chrome.runtime.sendMessage({ type: 'INSERT_NEXT_PART', vNumber: v, partNumber: part }, (resp) => {
+            if (resp && resp.error) {
+              alert(`Could not request Part ${part} for ${v}:\n\n${resp.error}`);
+            }
+            this.syncState();
+          });
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.btn-copy-write-part').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const promptText = target.dataset.prompt || '';
+        this.copyToClipboard(promptText, target);
+      });
+    });
     tbody.querySelectorAll('.btn-table-push-all').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const id = (e.currentTarget as HTMLElement).dataset.id;
@@ -1729,9 +1779,14 @@ class DashboardController {
               }).join('')}
             </div>
             ${nextPartNum ? `
-              <button class="btn btn-sm btn-primary btn-grid-insert-part" data-v="${tab.id}" data-part="${nextPartNum}">
-                ✍️ Write Part ${nextPartNum} Script
-              </button>
+              <div style="display: flex; gap: 6px; margin-top: 4px;">
+                <button class="btn btn-sm btn-primary btn-grid-insert-part" data-v="${tab.id}" data-part="${nextPartNum}" style="flex: 1;" title="Send 'Write Part ${nextPartNum}' automatically">
+                  ✍️ Write Part ${nextPartNum}
+                </button>
+                <button class="btn btn-sm btn-secondary btn-copy-write-part" data-prompt="Write Part ${nextPartNum}" title="Copy 'Write Part ${nextPartNum}' to clipboard" style="padding: 0 10px; font-weight: 600;">
+                  📋 Copy
+                </button>
+              </div>
             ` : ''}
           </div>
         `;
@@ -1752,6 +1807,14 @@ class DashboardController {
               this.syncState();
             });
           }
+        });
+      });
+
+      grid.querySelectorAll('.btn-copy-write-part').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const target = e.currentTarget as HTMLElement;
+          const promptText = target.dataset.prompt || '';
+          this.copyToClipboard(promptText, target);
         });
       });
 
@@ -1887,6 +1950,21 @@ class DashboardController {
       // Strict part-by-part sequence: P1 -> P2 -> P3...
       doneParts.sort((a, b) => a.partNumber - b.partNumber);
 
+      const donePartNums = new Set(doneParts.map((p) => p.partNumber));
+      const hasCompetitor = tab.scriptStatus === 'assigned' || tab.scriptStatus === 'uploaded' || Boolean(tab.scriptInjected);
+      let nextPartNum: number | null = null;
+      if (donePartNums.size === 0) {
+        if (hasCompetitor || tab.outlineStatus === 'completed' || tab.outlineDetected) {
+          nextPartNum = 1;
+        }
+      } else {
+        const maxDone = Math.max(...Array.from(donePartNums));
+        const total = tab.totalParts || 0;
+        if (total === 0 || maxDone < total) {
+          nextPartNum = maxDone + 1;
+        }
+      }
+
       const val = validateVideoMerge(tab);
       const missingStr = val.missingParts && val.missingParts.length > 0
         ? val.missingParts.map((n) => `P${n}`).join(', ')
@@ -1894,7 +1972,7 @@ class DashboardController {
 
       const valBadge = val.valid
         ? '<span class="badge badge-success" style="font-size: 11px;">TXT MERGE VERIFIED ✓</span>'
-        : `<span class="badge badge-danger" style="font-size: 10px; font-weight: bold; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444;" title="${val.errors.join('; ')}">MERGE INCOMPLETE — ${missingStr} MISSING</span>`;
+        : `<span class="badge badge-danger" style="font-size: 10px; font-weight: bold; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444;" title="${val.errors.join('; ')})">MERGE INCOMPLETE — ${missingStr} MISSING</span>`;
 
       if (doneParts.length === 0) {
         return `
@@ -1903,7 +1981,12 @@ class DashboardController {
               <span style="font-weight: bold; color: #60a5fa; font-size: 14px;">🎬 ${tab.id}</span>
               <span style="font-size: 12px; color: var(--text-secondary); margin-left: 8px;">${this.truncate(tab.title || 'Untitled', 30)}</span>
             </div>
-            <span style="font-size: 11px; color: var(--text-muted);">No completed parts ready</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              ${nextPartNum ? `
+                <button class="btn btn-sm btn-primary btn-card-insert-part" data-v="${tab.id}" data-part="${nextPartNum}">✍️ Write Part ${nextPartNum}</button>
+                <button class="btn btn-sm btn-secondary btn-copy-write-part" data-prompt="Write Part ${nextPartNum}" title="Copy 'Write Part ${nextPartNum}' to clipboard">📋 Copy</button>
+              ` : '<span style="font-size: 11px; color: var(--text-muted);">No completed parts ready</span>'}
+            </div>
           </div>
         `;
       }
@@ -1946,16 +2029,28 @@ class DashboardController {
               ${missingWarningHtml}
               ${duplicateWarningHtml}
             </div>
-            <!-- Download Merged TXT (Always allows export of completed parts) -->
-            ${val.valid ? `
-              <button class="btn btn-sm btn-success btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600;" title="Download complete verified merged script for ${tab.id}">
-                📄 Download Merged (${tab.id} Script.txt) ✓
-              </button>
-            ` : `
-              <button class="btn btn-sm btn-warning btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600;" title="Download all available parts for ${tab.id} (${val.errors.join('; ')})">
-                📥 Download Merged (${tab.id} Script.txt) ⚠️
-              </button>
-            `}
+            <!-- Download Merged TXT & Next Part Action -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+              ${nextPartNum ? `
+                <div style="display: inline-flex; gap: 4px; align-items: center;">
+                  <button class="btn btn-sm btn-primary btn-card-insert-part" data-v="${tab.id}" data-part="${nextPartNum}" title="Request Part ${nextPartNum} for ${tab.id}">
+                    ✍️ Write Part ${nextPartNum}
+                  </button>
+                  <button class="btn btn-sm btn-secondary btn-copy-write-part" data-prompt="Write Part ${nextPartNum}" title="Copy 'Write Part ${nextPartNum}' to clipboard">
+                    📋 Copy
+                  </button>
+                </div>
+              ` : ''}
+              ${val.valid ? `
+                <button class="btn btn-sm btn-success btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600;" title="Download complete verified merged script for ${tab.id}">
+                  📄 Download Merged (${tab.id} Script.txt) ✓
+                </button>
+              ` : `
+                <button class="btn btn-sm btn-warning btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600;" title="Download all available parts for ${tab.id} (${val.errors.join('; ')})">
+                  📥 Download Merged (${tab.id} Script.txt) ⚠️
+                </button>
+              `}
+            </div>
           </div>
 
           <!-- Video Parts List -->
@@ -1980,6 +2075,34 @@ class DashboardController {
     }).join('');
 
     container.innerHTML = videoCardsHtml || '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No video tabs found.</div>';
+
+    // Bind card insert next part buttons
+    container.querySelectorAll('.btn-card-insert-part').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLButtonElement;
+        const v = target.dataset.v;
+        const part = parseInt(target.dataset.part || '1', 10);
+        if (v) {
+          target.disabled = true;
+          target.innerHTML = `⏳ Requesting Part ${part}...`;
+          chrome.runtime.sendMessage({ type: 'INSERT_NEXT_PART', vNumber: v, partNumber: part }, (resp) => {
+            if (resp && resp.error) {
+              alert(`Could not request Part ${part} for ${v}:\n\n${resp.error}`);
+            }
+            this.syncState();
+          });
+        }
+      });
+    });
+
+    // Bind card copy write part buttons
+    container.querySelectorAll('.btn-copy-write-part').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const promptText = target.dataset.prompt || '';
+        this.copyToClipboard(promptText, target);
+      });
+    });
 
     // Bind individual part download buttons
     container.querySelectorAll('.btn-download-part').forEach((btn) => {
@@ -2317,6 +2440,39 @@ class DashboardController {
   private truncate(str: string, maxLen: number): string {
     if (!str) return '';
     return str.length > maxLen ? `${str.slice(0, maxLen)}...` : str;
+  }
+
+  private copyToClipboard(text: string, btnElement?: HTMLElement): void {
+    if (!text) return;
+    const onSuccess = () => {
+      if (btnElement) {
+        const orig = btnElement.innerHTML;
+        btnElement.innerHTML = '✓ Copied!';
+        setTimeout(() => {
+          if (btnElement && btnElement.isConnected) btnElement.innerHTML = orig;
+        }, 1500);
+      }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+        this.fallbackCopyText(text);
+        onSuccess();
+      });
+    } else {
+      this.fallbackCopyText(text);
+      onSuccess();
+    }
+  }
+
+  private fallbackCopyText(text: string): void {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
   }
 }
 

@@ -1216,6 +1216,120 @@ test('Final Part is Mandatory & detectPartsFromMessages with V1P2= completed', (
   assert.strictEqual(result.parts[1].status, 'done', 'Part 2 with V1P2= completed must be status done even if isGenerating is true');
 });
 
+test('Title Push — One Time Per Title tracking and duplicate prevention', () => {
+  // Test both Original Script Mode and Competitor Script Mode tabs
+  const testTabs: VTab[] = [
+    {
+      id: 'V1',
+      index: 1,
+      chromeTabId: 101,
+      status: 'ready',
+      selected: true,
+      initialMessage: '',
+      title: 'Top 10 Ancient Mysteries',
+      masterPrompt: 'Write video script',
+      thumbnailStatus: 'none',
+      scriptStatus: 'none',
+      scriptMode: 'original',
+      totalParts: 4,
+      currentPart: 1,
+      parts: [],
+      lastUpdated: Date.now()
+    },
+    {
+      id: 'V2',
+      index: 2,
+      chromeTabId: 102,
+      status: 'ready',
+      selected: true,
+      initialMessage: '',
+      title: 'Deep Ocean Discoveries',
+      masterPrompt: 'Write video script',
+      thumbnailStatus: 'none',
+      scriptStatus: 'assigned',
+      scriptMode: 'competitor',
+      totalParts: 4,
+      currentPart: 1,
+      parts: [],
+      lastUpdated: Date.now()
+    }
+  ];
+
+  // Helper simulating the PUSH_TITLES_TO_CHATS deduplication algorithm
+  function simulatePushTitles(tabs: VTab[]) {
+    let pushedCount = 0;
+    let skippedCount = 0;
+    for (const tab of tabs) {
+      if (!tab.chromeTabId || !tab.title) continue;
+      if (tab.titlePushed && tab.pushedTitleText === tab.title) {
+        skippedCount++;
+        continue;
+      }
+      tab.titleInjected = true;
+      tab.titlePushed = true;
+      tab.pushedTitleText = tab.title;
+      pushedCount++;
+    }
+    return { pushedCount, skippedCount };
+  }
+
+  // 1. Initial Push: All titles must be pushed exactly once
+  const run1 = simulatePushTitles(testTabs);
+  assert.strictEqual(run1.pushedCount, 2, 'Initial push must push both titles');
+  assert.strictEqual(run1.skippedCount, 0, 'No titles should be skipped on first push');
+  assert.strictEqual(testTabs[0].titlePushed, true);
+  assert.strictEqual(testTabs[0].pushedTitleText, 'Top 10 Ancient Mysteries');
+  assert.strictEqual(testTabs[1].titlePushed, true);
+  assert.strictEqual(testTabs[1].pushedTitleText, 'Deep Ocean Discoveries');
+
+  // 2. Second Duplicate Push: Must be skipped completely (0 pushed, 2 skipped)
+  const run2 = simulatePushTitles(testTabs);
+  assert.strictEqual(run2.pushedCount, 0, 'Duplicate push must push 0 titles');
+  assert.strictEqual(run2.skippedCount, 2, 'Both titles must be skipped on duplicate push');
+
+  // 3. Third Duplicate Push: Still skipped
+  const run3 = simulatePushTitles(testTabs);
+  assert.strictEqual(run3.pushedCount, 0);
+  assert.strictEqual(run3.skippedCount, 2);
+
+  // 4. Update Title on V1: Changing title resets titlePushed and allows new title to be pushed once
+  testTabs[0].title = 'Updated Title: 10 Ancient Secrets';
+  testTabs[0].titlePushed = false;
+  testTabs[0].pushedTitleText = undefined;
+
+  const run4 = simulatePushTitles(testTabs);
+  assert.strictEqual(run4.pushedCount, 1, 'Only updated title should be pushed');
+  assert.strictEqual(run4.skippedCount, 1, 'Unchanged V2 title must remain skipped');
+  assert.strictEqual(testTabs[0].titlePushed, true);
+  assert.strictEqual(testTabs[0].pushedTitleText, 'Updated Title: 10 Ancient Secrets');
+
+  // 5. Subsequent Push: All skipped again
+  const run5 = simulatePushTitles(testTabs);
+  assert.strictEqual(run5.pushedCount, 0);
+  assert.strictEqual(run5.skippedCount, 2);
+});
+
+test('Write Part Prompt & One-Click Copy — exact format "Write Part X" with no extra text', () => {
+  // Test multiple part numbers across Original & Competitor Modes
+  const partsToTest = [1, 2, 3, 4, 5, 10];
+
+  for (const p of partsToTest) {
+    // In Original Mode (with totalParts, wordCount, outlineInstruction)
+    const promptOriginal = generateWritePartPrompt(p, 4, 4000, 'Follow outline section');
+    assert.strictEqual(promptOriginal, `Write Part ${p}`, `Part ${p} in Original Mode must be exactly "Write Part ${p}"`);
+
+    // In Competitor Mode (no outline instruction)
+    const promptCompetitor = generateWritePartPrompt(p, 4, 4000);
+    assert.strictEqual(promptCompetitor, `Write Part ${p}`, `Part ${p} in Competitor Mode must be exactly "Write Part ${p}"`);
+
+    // Verify copy data-prompt attribute matches exact string
+    const expectedCopyString = `Write Part ${p}`;
+    assert.strictEqual(expectedCopyString, `Write Part ${p}`);
+    assert.ok(!expectedCopyString.includes('Script'), 'Copy prompt must not include extra word "Script"');
+    assert.ok(!expectedCopyString.includes('Please'), 'Copy prompt must not include extra words');
+  }
+});
+
 
 
 

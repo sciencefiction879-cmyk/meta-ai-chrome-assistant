@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Meta.ai Chrome Assistant",
-  "version": "3.8.0",
+  "name": "Meta AI Multi-Tab Assistant",
+  "version": "3.9.0",
   "description": "Production Chrome Extension for orchestrating multiple Meta.ai chat tabs, script generation, and batch export.",
   "permissions": [
     "tabs",

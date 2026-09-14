@@ -136,10 +136,27 @@ export class QwenAdapter {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     } else if (input.isContentEditable) {
       input.focus();
-      // Use document.execCommand for rich-text framework compatibility
-      document.execCommand('selectAll', false, undefined);
-      const success = document.execCommand('insertText', false, text);
-      if (!success || !input.textContent || !input.textContent.includes(text.slice(0, 20))) {
+
+      // Avoid duplicate insertion if input already contains this exact text
+      if (input.textContent && input.textContent.trim() === text.trim()) {
+        return true;
+      }
+
+      // Explicitly select all contents inside this contenteditable container
+      try {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch {}
+
+      let insertedCleanly = false;
+      try {
+        insertedCleanly = document.execCommand('insertText', false, text);
+      } catch {}
+
+      if (!insertedCleanly || !input.textContent || !input.textContent.includes(text.slice(0, Math.min(20, text.length)))) {
         try {
           const pasteEvent = new ClipboardEvent('paste', {
             bubbles: true,
@@ -150,7 +167,7 @@ export class QwenAdapter {
           input.dispatchEvent(pasteEvent);
         } catch {}
       }
-      if (!input.textContent || !input.textContent.includes(text.slice(0, 20))) {
+      if (!input.textContent || input.textContent.trim().length === 0) {
         input.textContent = text;
       }
       input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
@@ -186,8 +203,14 @@ export class QwenAdapter {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     } else if (input.isContentEditable) {
       input.focus();
-      document.execCommand('selectAll', false, undefined);
-      document.execCommand('delete', false, undefined);
+      try {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        document.execCommand('delete', false, undefined);
+      } catch {}
       input.textContent = '';
       input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
     }

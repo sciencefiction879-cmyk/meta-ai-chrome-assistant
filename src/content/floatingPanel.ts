@@ -286,7 +286,10 @@ export class FloatingPanel {
 
       const canWriteThisPart = (part.status === 'ready' || part.status === 'waiting') && status !== 'running';
       const actionButton = canWriteThisPart
-        ? `<button class="hud-part-write-btn" data-part="${part.partNumber}" style="background: #2563eb; color: #ffffff; border: none; border-radius: 3px; font-size: 10px; font-weight: 600; padding: 1px 6px; cursor: pointer; margin-left: 6px;" title="Write Part ${part.partNumber}">✍️ Write</button>`
+        ? `<div style="display: inline-flex; gap: 3px; align-items: center; margin-left: 6px;">
+            <button class="hud-part-write-btn" data-part="${part.partNumber}" style="background: #2563eb; color: #ffffff; border: none; border-radius: 3px; font-size: 10px; font-weight: 600; padding: 2px 6px; cursor: pointer;" title="Write Part ${part.partNumber}">✍️ Write Part ${part.partNumber}</button>
+            <button class="btn-copy-write-part" data-prompt="Write Part ${part.partNumber}" style="background: #374151; color: #f3f4f6; border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; font-size: 10px; font-weight: 600; padding: 2px 5px; cursor: pointer;" title="Copy 'Write Part ${part.partNumber}' to clipboard">📋 Copy</button>
+          </div>`
         : '';
 
       return `
@@ -441,9 +444,14 @@ export class FloatingPanel {
 
           <div class="hud-actions">
             ${nextPartToInsert ? `
-              <button class="hud-btn" id="hud-insert-next-btn">
-                ✍️ Write Part ${nextPartToInsert} Script
-              </button>
+              <div style="display: flex; gap: 4px; width: 100%; margin-bottom: 4px;">
+                <button class="hud-btn" id="hud-insert-next-btn" style="flex: 1; margin: 0;">
+                  ✍️ Write Part ${nextPartToInsert}
+                </button>
+                <button class="hud-btn hud-btn-secondary btn-copy-write-part" id="hud-copy-next-btn" data-prompt="Write Part ${nextPartToInsert}" style="width: auto; padding: 4px 10px; font-weight: 600; white-space: nowrap; margin: 0;" title="Copy 'Write Part ${nextPartToInsert}' to clipboard">
+                  📋 Copy
+                </button>
+              </div>
             ` : ''}
 
             <button class="hud-btn hud-btn-secondary" id="hud-download-btn" ${!this.hasDoneParts(tab?.parts) ? 'disabled' : ''}>
@@ -470,15 +478,28 @@ export class FloatingPanel {
       return null;
     }
     if (!parts || parts.length === 0) {
-      if (!hasScript && isOutlineDone) return 1;
-      return null;
+      return 1;
     }
-    const doneNumbers = new Set(parts.filter((p) => p.status === 'done').map((p) => p.partNumber));
-    if (!hasScript && isOutlineDone && !doneNumbers.has(1)) return 1;
+    const doneNumbers = new Set(
+      parts
+        .filter((p) => p.status === 'done' || (p.content && p.content.trim().length > 20))
+        .map((p) => p.partNumber)
+    );
+    if (!doneNumbers.has(1)) return 1;
 
     for (const p of parts) {
-      if (p.status === 'ready' && !doneNumbers.has(p.partNumber)) return p.partNumber;
-      if (p.status === 'waiting' && !doneNumbers.has(p.partNumber)) return p.partNumber;
+      if ((p.status === 'ready' || p.status === 'waiting') && !doneNumbers.has(p.partNumber)) {
+        return p.partNumber;
+      }
+    }
+
+    const maxDone = Array.from(doneNumbers).reduce((max, n) => Math.max(max, n), 0);
+    const total = this.currentTab?.totalParts || 0;
+    if (total > 0 && maxDone < total) {
+      return maxDone + 1;
+    }
+    if (total === 0 && maxDone >= 1) {
+      return maxDone + 1;
     }
     return null;
   }
@@ -665,11 +686,39 @@ export class FloatingPanel {
         setTimeout(() => {
           if (insertBtn && insertBtn.isConnected && this.currentTab?.status !== 'running') {
             insertBtn.disabled = false;
-            insertBtn.textContent = `✍️ Write Part ${nextPartNum} Script`;
+            insertBtn.textContent = `✍️ Write Part ${nextPartNum}`;
           }
         }, 5000);
       });
     }
+
+    // Attach listener to ALL Copy buttons - ALWAYS available as manual fallback!
+    this.container.querySelectorAll('.btn-copy-write-part').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const target = btn as HTMLElement;
+        const promptToCopy = target.dataset.prompt || '';
+        if (promptToCopy) {
+          try {
+            await navigator.clipboard.writeText(promptToCopy);
+          } catch {
+            const textarea = document.createElement('textarea');
+            textarea.value = promptToCopy;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+          }
+          const origText = target.textContent;
+          target.textContent = '✓ Copied!';
+          setTimeout(() => {
+            if (target && target.isConnected) target.textContent = origText;
+          }, 1500);
+        }
+      });
+    });
 
     // Attach listeners to individual row Write Part buttons
     this.container.querySelectorAll('.hud-part-write-btn').forEach((btn) => {
@@ -683,7 +732,7 @@ export class FloatingPanel {
           setTimeout(() => {
             if (btn && btn.isConnected && this.currentTab?.status !== 'running') {
               (btn as HTMLButtonElement).disabled = false;
-              btn.textContent = '✍️ Write';
+              btn.textContent = `✍️ Write Part ${part}`;
             }
           }, 5000);
         }

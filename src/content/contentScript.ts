@@ -248,16 +248,43 @@ class MetaContentController {
         case 'PASTE_PROMPT_ONLY': {
           const vId = message.vNumber || this.currentTabState?.id || 'Tab';
           const promptText = formatPromptWithTitle(message.title, message.masterPrompt, vId);
-          const ok = this.adapter.insertText(promptText);
+
+          const currentInput = this.adapter.findChatInput();
+          const currentText = currentInput
+            ? (currentInput instanceof HTMLTextAreaElement || currentInput instanceof HTMLInputElement
+                ? currentInput.value
+                : currentInput.textContent || '')
+            : '';
+          const cleanTitle = (message.title || '').trim();
+          const titleAlreadyInInput = Boolean(
+            cleanTitle && currentText && currentText.includes(cleanTitle)
+          );
+
+          let ok = true;
+          if (titleAlreadyInInput) {
+            console.log(`[ContentScript] Title for ${vId} already in chat input. Skipping duplicate push.`);
+          } else {
+            // Cleanly clear existing input contents before inserting so it never appends or duplicates
+            this.adapter.clearInput();
+            ok = this.adapter.insertText(promptText);
+          }
+
+          if (this.currentTabState) {
+            this.currentTabState.titleInjected = true;
+            this.currentTabState.titlePushed = true;
+            this.currentTabState.pushedTitleText = message.title;
+            this.hud.update(this.currentTabState);
+          }
+
           chrome.runtime.sendMessage({
             type: 'LOG_MESSAGE',
             level: ok ? 'SUCCESS' : 'ERROR',
             message: ok
-              ? `${vId}: Title & Master Prompt pasted into chat input (Stage 1 confirmed).`
+              ? `${vId}: Title & Master Prompt pushed exactly once to chat input.`
               : `${vId}: Failed to paste prompt into chat input.`,
             vNumber: vId
           });
-          sendResponse({ success: ok });
+          sendResponse({ success: ok, skippedDuplicate: titleAlreadyInInput });
           break;
         }
 
@@ -387,14 +414,34 @@ class MetaContentController {
       // 1. Build prompt dynamically with title placed at "My Version of Title:" or marker, including V-number prefix
       const promptText = formatPromptWithTitle(data.title, data.masterPrompt, vId);
 
-      // Wait for input to be ready if page was busy
-      let inputInserted = this.adapter.insertText(promptText);
-      if (!inputInserted) {
-        for (let i = 0; i < 12; i++) {
-          await new Promise((r) => setTimeout(r, 400));
-          inputInserted = this.adapter.insertText(promptText);
-          if (inputInserted) break;
+      // Check if title / prompt was already pushed or already exists in the chat input
+      const currentInput = this.adapter.findChatInput();
+      const currentText = currentInput
+        ? (currentInput instanceof HTMLTextAreaElement || currentInput instanceof HTMLInputElement
+            ? currentInput.value
+            : currentInput.textContent || '')
+        : '';
+      const cleanTitle = (data.title || '').trim();
+      const titleAlreadyInInput = Boolean(
+        data.tab?.titlePushed ||
+        (cleanTitle && currentText && currentText.includes(cleanTitle)) ||
+        (currentText && promptText && currentText.includes(promptText.slice(0, Math.min(40, promptText.length))))
+      );
+
+      let inputInserted = true;
+      if (!titleAlreadyInInput) {
+        // Clear any residual input to ensure title is pushed exactly once without duplication
+        this.adapter.clearInput();
+        inputInserted = this.adapter.insertText(promptText);
+        if (!inputInserted) {
+          for (let i = 0; i < 12; i++) {
+            await new Promise((r) => setTimeout(r, 400));
+            inputInserted = this.adapter.insertText(promptText);
+            if (inputInserted) break;
+          }
         }
+      } else {
+        console.log(`[ContentScript] ${vId}: Title was already pushed once. Preserving existing prompt in input.`);
       }
 
       if (!inputInserted) {

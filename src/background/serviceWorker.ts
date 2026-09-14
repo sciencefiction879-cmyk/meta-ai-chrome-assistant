@@ -505,24 +505,34 @@ class BackgroundServiceWorker {
         const target = message.target || 'all';
         const targetTabs = this.getTargetTabs(target);
         let count = 0;
+        let skippedAlreadyPushed = 0;
         for (const tab of targetTabs) {
-          if (tab.chromeTabId) {
-            tab.titleInjected = Boolean(tab.title);
-            tab.promptInjected = Boolean(tab.masterPrompt || this.state.config.masterPrompt);
-            this.recalculateTabStatus(tab);
-            chrome.tabs.sendMessage(tab.chromeTabId, {
-              type: 'PASTE_PROMPT_ONLY',
-              title: tab.title,
-              masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
-              vNumber: tab.id
-            }).catch(() => {});
-            chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
-            count++;
+          if (!tab.chromeTabId || !tab.title) continue;
+
+          // Track which titles have already been pushed and prevent duplicate pushes
+          if (tab.titlePushed && tab.pushedTitleText === tab.title) {
+            skippedAlreadyPushed++;
+            this.addLog('INFO', `${tab.id}: Title already pushed once ("${tab.title}"). Skipping duplicate push.`, tab.id);
+            continue;
           }
+
+          tab.titleInjected = true;
+          tab.titlePushed = true;
+          tab.pushedTitleText = tab.title;
+          tab.promptInjected = Boolean(tab.masterPrompt || this.state.config.masterPrompt);
+          this.recalculateTabStatus(tab);
+          chrome.tabs.sendMessage(tab.chromeTabId, {
+            type: 'PASTE_PROMPT_ONLY',
+            title: tab.title,
+            masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
+            vNumber: tab.id
+          }).catch(() => {});
+          chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
+          count++;
         }
-        this.addLog('INFO', `Stage 1 / Push Titles: Injected into ${count} Qwen chat inputs (${target}).`);
+        this.addLog('INFO', `Push Titles: Pushed ${count} titles (${target}). Skipped ${skippedAlreadyPushed} already pushed.`);
         await this.persist();
-        return { success: true, count, tabs: this.state.tabs };
+        return { success: true, count, skipped: skippedAlreadyPushed, tabs: this.state.tabs };
       }
 
       case 'PUSH_PROMPT_TO_CHATS': {
@@ -627,15 +637,19 @@ class BackgroundServiceWorker {
         for (const tab of targetTabs) {
           if (!tab.chromeTabId) continue;
 
-          // 1. Push Title & Prompt
-          tab.titleInjected = Boolean(tab.title);
-          tab.promptInjected = Boolean(tab.masterPrompt || this.state.config.masterPrompt);
-          chrome.tabs.sendMessage(tab.chromeTabId, {
-            type: 'PASTE_PROMPT_ONLY',
-            title: tab.title,
-            masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
-            vNumber: tab.id
-          }).catch(() => {});
+          // 1. Push Title & Prompt (ONLY if not already pushed once!)
+          if (tab.title && (!tab.titlePushed || tab.pushedTitleText !== tab.title)) {
+            tab.titleInjected = true;
+            tab.titlePushed = true;
+            tab.pushedTitleText = tab.title;
+            tab.promptInjected = Boolean(tab.masterPrompt || this.state.config.masterPrompt);
+            chrome.tabs.sendMessage(tab.chromeTabId, {
+              type: 'PASTE_PROMPT_ONLY',
+              title: tab.title,
+              masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
+              vNumber: tab.id
+            }).catch(() => {});
+          }
 
           // 2. Push Thumbnail
           if (tab.thumbnailId) {
@@ -690,6 +704,9 @@ class BackgroundServiceWorker {
       case 'CLEAR_TITLES': {
         this.state.tabs.forEach((t) => {
           t.title = '';
+          t.titleInjected = false;
+          t.titlePushed = false;
+          t.pushedTitleText = undefined;
           this.recalculateTabStatus(t);
         });
         this.addLog('INFO', 'Cleared all assigned titles.');
@@ -1327,7 +1344,12 @@ class BackgroundServiceWorker {
           (t) => (t.index === vNum || t.id === `V${vNum}`) && !assignedTabs.has(t.id)
         );
         if (matchedTab) {
-          matchedTab.title = title;
+          if (matchedTab.title !== title) {
+            matchedTab.title = title;
+            matchedTab.titleInjected = false;
+            matchedTab.titlePushed = false;
+            matchedTab.pushedTitleText = undefined;
+          }
           this.recalculateTabStatus(matchedTab);
           this.addLog('INFO', `Title assigned to ${matchedTab.id}: "${matchedTab.title}"`, matchedTab.id);
           assignedTabs.add(matchedTab.id);
@@ -1341,7 +1363,13 @@ class BackgroundServiceWorker {
     let unassignedIdx = 0;
     for (const tab of targetTabs) {
       if (!assignedTabs.has(tab.id) && unassignedIdx < unassignedTitles.length) {
-        tab.title = unassignedTitles[unassignedIdx];
+        const newTitle = unassignedTitles[unassignedIdx];
+        if (tab.title !== newTitle) {
+          tab.title = newTitle;
+          tab.titleInjected = false;
+          tab.titlePushed = false;
+          tab.pushedTitleText = undefined;
+        }
         this.recalculateTabStatus(tab);
         this.addLog('INFO', `Title assigned to ${tab.id}: "${tab.title}"`, tab.id);
         assignedTabs.add(tab.id);
@@ -1377,9 +1405,11 @@ class BackgroundServiceWorker {
         tab.masterPrompt = globalPrompt;
       }
 
-      // Auto-push Title & Prompt if not yet injected
-      if (tab.title && (!tab.titleInjected || !tab.promptInjected)) {
+      // Auto-push Title & Prompt ONLY if not already pushed once!
+      if (tab.title && (!tab.titlePushed || tab.pushedTitleText !== tab.title)) {
         tab.titleInjected = true;
+        tab.titlePushed = true;
+        tab.pushedTitleText = tab.title;
         tab.promptInjected = true;
         chrome.tabs.sendMessage(tab.chromeTabId, {
           type: 'PASTE_PROMPT_ONLY',
