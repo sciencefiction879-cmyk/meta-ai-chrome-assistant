@@ -772,27 +772,22 @@ class MetaContentController {
     if (!this.currentTabState) return;
     const vId = this.currentTabState.id;
 
-    // Strict Pre-Merge Validation: Expected === Detected Completed === Merged
     const val = validateVideoMerge(this.currentTabState);
+    const doneParts = this.currentTabState.parts.filter(
+      (p) => (p.status === 'done' || (p.content && p.content.trim().length > 20)) && !detectOutlineInText(p.content).isOutline
+    );
+
+    if (doneParts.length === 0) {
+      alert(`No completed script parts found for ${vId} yet.`);
+      return;
+    }
+
     if (!val.valid) {
       const missingStr = val.missingParts && val.missingParts.length > 0
         ? val.missingParts.map((n) => `P${n}`).join(', ')
         : `${val.completedPartsCount}/${this.currentTabState.totalParts || '?'}`;
-      alert(
-        `⛔ MERGE INCOMPLETE — ${vId} ${missingStr} MISSING\n\n` +
-        `Expected Parts: ${this.currentTabState.totalParts || 'Unknown'}\n` +
-        `Completed Parts: ${val.completedPartsCount}\n` +
-        (val.missingParts && val.missingParts.length > 0 ? `Missing Parts: ${val.missingParts.map((n) => `${vId} P${n}`).join(', ')}\n\n` : '\n') +
-        `All ${this.currentTabState.totalParts || 'required'} parts must be completed with their matching completion markers before merging.`
-      );
-      return;
+      console.warn(`[HUD Download] Partial merge for ${vId} — missing parts: ${missingStr}. Exporting available parts.`);
     }
-
-    const doneParts = this.currentTabState.parts.filter(
-      (p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline
-    );
-
-    if (doneParts.length === 0) return;
 
     // Strict numerical order: P1, then P2, then P3...
     doneParts.sort((a, b) => a.partNumber - b.partNumber);
@@ -1411,15 +1406,17 @@ class MetaContentController {
 
         // Report ALL verified completed parts with content to background
         this.currentTabState.parts.forEach((p) => {
-          if (p.status === 'done' && p.content && p.content.trim()) {
+          const isDone = p.status === 'done' || (!isGeneratingNow && Boolean(p.content && p.content.trim().length > 20));
+          if (isDone && p.content && p.content.trim()) {
+            p.status = 'done';
             this.safeSendMessage({
               type: 'CONTENT_PART_COMPLETED',
               vNumber: vId,
               partNumber: p.partNumber,
               content: p.content,
               heading: p.heading,
-              explicitMarker: p.explicitMarker,
-              videoNumber: p.videoNumber
+              explicitMarker: p.explicitMarker || `V${vNum} P${p.partNumber}`,
+              videoNumber: p.videoNumber || vNum
             });
           }
         });

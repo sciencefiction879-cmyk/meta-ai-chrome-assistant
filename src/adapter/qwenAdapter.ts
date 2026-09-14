@@ -1,5 +1,5 @@
 import { QWEN_SELECTORS } from './selectors';
-import { detectPartsInText, detectPartsFromMessages, cleanScriptContent, PartDetectionResult } from '../utils/partDetector';
+import { detectPartsInText, detectPartsFromMessages, cleanScriptContent, PartDetectionResult, findExplicitMarkersInText } from '../utils/partDetector';
 
 export class QwenAdapter {
   private document: Document;
@@ -381,15 +381,22 @@ export class QwenAdapter {
    * Finds all assistant message nodes in the chat.
    */
   public findGeneratedMessages(): HTMLElement[] {
-    const list: HTMLElement[] = [];
+    // 1. Try all selectors and find the one that yields the most distinct message elements
+    let bestSelectorMatches: HTMLElement[] = [];
     for (const selector of QWEN_SELECTORS.ASSISTANT_MESSAGES) {
-      const matches = this.document.querySelectorAll<HTMLElement>(selector);
-      if (matches.length > 0) {
-        return Array.from(matches);
-      }
+      try {
+        const matches = Array.from(this.document.querySelectorAll<HTMLElement>(selector));
+        const valid = matches.filter((el) => !el.querySelector('textarea, input, [contenteditable="true"]'));
+        if (valid.length > bestSelectorMatches.length) {
+          bestSelectorMatches = valid;
+        }
+      } catch {}
+    }
+    if (bestSelectorMatches.length > 1) {
+      return bestSelectorMatches;
     }
 
-    // Fallback: query message/response containers that contain assistant/script content
+    // 2. Query message/response containers that contain assistant/script content
     const candidates = this.document.querySelectorAll<HTMLElement>(
       'div[class*="message" i], div[class*="response" i], div[class*="bubble" i], div[class*="markdown" i], [data-testid*="message" i], [data-testid*="response" i], article, section'
     );
@@ -401,7 +408,11 @@ export class QwenAdapter {
         text.length > 25 &&
         /(part\s*0*\d+|total\s*parts?|v\s*0*\d+\s*[,/\\._\-–—:|~\s]*\s*p\s*0*\d+|outline\b|(?:completed|complete|done)\b)/i.test(text)
       ) {
-        if (!validCandidates.some((v) => v.contains(el))) {
+        const parentIdx = validCandidates.findIndex((v) => v.contains(el));
+        if (parentIdx !== -1) {
+          // Replace broad outer container with specific child message node
+          validCandidates[parentIdx] = el;
+        } else if (!validCandidates.some((v) => el.contains(v))) {
           validCandidates.push(el);
         }
       }
@@ -410,7 +421,11 @@ export class QwenAdapter {
       return validCandidates;
     }
 
-    return list;
+    if (bestSelectorMatches.length > 0) {
+      return bestSelectorMatches;
+    }
+
+    return [];
   }
 
   /**
@@ -555,13 +570,28 @@ export class QwenAdapter {
    */
   public getAllAssistantMessagesText(): string[] {
     const messages = this.findGeneratedMessages();
+    let texts: string[] = [];
     if (messages.length > 0) {
-      return messages
+      texts = messages
         .map((m) => m.innerText || m.textContent || '')
         .filter((t) => t && t.trim().length > 0);
     }
-    const latest = this.findLatestResponse();
-    return latest ? [latest] : [];
+    if (texts.length === 0) {
+      const latest = this.findLatestResponse();
+      if (latest && latest.trim()) texts = [latest];
+    }
+    // Safety check: if selector missed parts that exist in document body
+    try {
+      const pageText = (this.document.body?.innerText || '').trim();
+      if (pageText && /(?:part\s*0*\d+|v\s*0*\d+\s*[,/\\._\-–—:|~\s]*\s*p\s*0*\d+)/i.test(pageText)) {
+        const pageMarkers = findExplicitMarkersInText(pageText);
+        const textsMarkers = texts.flatMap((t) => findExplicitMarkersInText(t));
+        if (pageMarkers.length > textsMarkers.length) {
+          texts.push(pageText);
+        }
+      }
+    } catch {}
+    return texts;
   }
 
   /**

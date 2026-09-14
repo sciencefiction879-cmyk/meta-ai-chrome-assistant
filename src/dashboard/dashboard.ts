@@ -1946,14 +1946,14 @@ class DashboardController {
               ${missingWarningHtml}
               ${duplicateWarningHtml}
             </div>
-            <!-- Requirement 1 & 4: Strict Download Merged TXT -->
+            <!-- Download Merged TXT (Always allows export of completed parts) -->
             ${val.valid ? `
               <button class="btn btn-sm btn-success btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600;" title="Download complete verified merged script for ${tab.id}">
                 📄 Download Merged (${tab.id} Script.txt) ✓
               </button>
             ` : `
-              <button class="btn btn-sm btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600; background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4);" title="${val.errors.join('; ')}">
-                ⛔ MERGE INCOMPLETE — ${missingStr} MISSING
+              <button class="btn btn-sm btn-warning btn-download-video-merged" data-v="${tab.id}" style="font-weight: 600;" title="Download all available parts for ${tab.id} (${val.errors.join('; ')})">
+                📥 Download Merged (${tab.id} Script.txt) ⚠️
               </button>
             `}
           </div>
@@ -2003,7 +2003,7 @@ class DashboardController {
   private downloadSinglePart(vNumber: string, partNumber: number): void {
     const tab = this.state.tabs.find((t) => t.id === vNumber);
     if (!tab) return;
-    const part = tab.parts.find((p) => p.partNumber === partNumber && p.status === 'done' && p.content);
+    const part = tab.parts.find((p) => p.partNumber === partNumber && (p.status === 'done' || (p.content && p.content.trim().length > 20)) && p.content);
     if (!part || !part.content) {
       alert(`Part ${partNumber} for ${vNumber} has no content to download.`);
       return;
@@ -2014,29 +2014,23 @@ class DashboardController {
     triggerDownload(blob, `${tab.id} P${part.partNumber}.txt`);
   }
 
-  // Requirement 5, 6, 10, 11, 12, 13, 15: Verify and Download Merged Video with Headings
-  // Requirement 1, 2, 3, 4: Strict Mandatory Merge Validation
+  // Requirement 5, 6, 10, 11, 12, 13, 15: Download Merged Video with Headings
   private downloadMergedVideo(vNumber: string): void {
     const tab = this.state.tabs.find((t) => t.id === vNumber);
     if (!tab) return;
 
     const val = validateVideoMerge(tab);
-    if (!val.valid) {
-      alert(
-        `⚠️ CANNOT DOWNLOAD INCOMPLETE MERGE FOR ${vNumber}:\n\n` +
-        `Expected Parts: ${tab.totalParts || 'Unknown'}\n` +
-        `Completed Parts: ${val.completedPartsCount}\n` +
-        (val.missingParts && val.missingParts.length > 0 ? `Missing Parts: ${val.missingParts.map((n) => `${vNumber} P${n}`).join(', ')}\n\n` : '\n') +
-        `Errors:\n${val.errors.join('\n')}\n\n` +
-        `All ${tab.totalParts || 'required'} parts must be completed with their matching completion markers (e.g. ${vNumber}, P{x} = COMPLETED) before merging.`
-      );
+    const doneParts = tab.parts.filter((p) => (p.status === 'done' || (p.content && p.content.trim().length > 20)) && !detectOutlineInText(p.content).isOutline);
+    if (doneParts.length === 0) {
+      alert(`No completed script parts found for ${vNumber} to merge.`);
       return;
     }
 
-    const doneParts = tab.parts.filter((p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline);
-    if (doneParts.length === 0) {
-      alert(`No completed parts found for ${vNumber} to merge.`);
-      return;
+    if (!val.valid) {
+      const missingStr = val.missingParts && val.missingParts.length > 0
+        ? val.missingParts.map((n) => `P${n}`).join(', ')
+        : 'some parts';
+      console.warn(`[Download Merged] Downloading available parts for ${vNumber} (Missing: ${missingStr}).`);
     }
 
     // Sort strictly: P1 -> P2 -> P3...
@@ -2133,26 +2127,21 @@ class DashboardController {
       return numA - numB;
     });
 
-    const verifiedTabs = sortedTabs.filter((tab) => validateVideoMerge(tab).valid);
-    const incompleteTabs = sortedTabs.filter((tab) => !validateVideoMerge(tab).valid && tab.parts.some((p) => p.status === 'done' && p.content));
+    const tabsToExport = sortedTabs.filter((tab) =>
+      tab.parts.some((p) => (p.status === 'done' || (p.content && p.content.trim().length > 20)) && !detectOutlineInText(p.content).isOutline)
+    );
 
-    if (verifiedTabs.length === 0) {
-      const missingDetails = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
-      alert(`⛔ MERGE INCOMPLETE — No videos have all required parts completed:\n\n${missingDetails || 'No completed videos found.'}\n\nAll required parts must be completed before downloading merged script.`);
+    if (tabsToExport.length === 0) {
+      alert('No scripts or completed parts available to download yet. Please generate parts first.');
       return;
-    }
-
-    if (incompleteTabs.length > 0) {
-      const skippedList = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
-      alert(`⚠️ Notice: The following videos are INCOMPLETE and skipped from merged download:\n\n${skippedList}\n\nOnly 100% verified complete videos will be included.`);
     }
 
     let combinedContent = '';
     const includedVideoIds: string[] = [];
 
-    verifiedTabs.forEach((tab, vIdx) => {
+    tabsToExport.forEach((tab) => {
       const doneParts = tab.parts.filter(
-        (p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline
+        (p) => (p.status === 'done' || (p.content && p.content.trim().length > 20)) && !detectOutlineInText(p.content).isOutline
       );
       if (doneParts.length > 0) {
         doneParts.sort((a, b) => a.partNumber - b.partNumber);
@@ -2165,7 +2154,7 @@ class DashboardController {
           videoMerged += formatMergedScriptPart(tab.id, p.partNumber, heading, p.content);
         });
 
-        if (vIdx > 0) combinedContent += '\n\n\n';
+        if (combinedContent.length > 0) combinedContent += '\n\n\n';
         combinedContent += videoMerged.trim();
       }
     });
@@ -2179,22 +2168,17 @@ class DashboardController {
   private downloadAllIndividualFiles(): void {
     let triggered = 0;
     const sortedTabs = [...this.state.tabs].sort((a, b) => a.index - b.index);
-    const verifiedTabs = sortedTabs.filter((tab) => validateVideoMerge(tab).valid);
-    const incompleteTabs = sortedTabs.filter((tab) => !validateVideoMerge(tab).valid && tab.parts.some((p) => p.status === 'done' && p.content));
+    const tabsToExport = sortedTabs.filter((tab) =>
+      tab.parts.some((p) => (p.status === 'done' || (p.content && p.content.trim().length > 20)) && !detectOutlineInText(p.content).isOutline)
+    );
 
-    if (verifiedTabs.length === 0) {
-      const missingDetails = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
-      alert(`⛔ MERGE INCOMPLETE — No videos have all required parts completed:\n\n${missingDetails || 'No completed videos found.'}\n\nAll required parts must be completed before downloading merged scripts.`);
+    if (tabsToExport.length === 0) {
+      alert('No scripts or completed parts available to download yet. Please generate parts first.');
       return;
     }
 
-    if (incompleteTabs.length > 0) {
-      const skippedList = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
-      alert(`⚠️ Notice: The following videos are INCOMPLETE and skipped from download:\n\n${skippedList}\n\nOnly 100% verified complete videos will be included.`);
-    }
-
-    verifiedTabs.forEach((tab) => {
-      const doneParts = tab.parts.filter((p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline);
+    tabsToExport.forEach((tab) => {
+      const doneParts = tab.parts.filter((p) => (p.status === 'done' || (p.content && p.content.trim().length > 20)) && !detectOutlineInText(p.content).isOutline);
       if (doneParts.length > 0) {
         doneParts.sort((a, b) => a.partNumber - b.partNumber);
         
@@ -2216,23 +2200,18 @@ class DashboardController {
   private async downloadAllAsZip(): Promise<void> {
     const filesToZip: { filename: string; content: string }[] = [];
     const sortedTabs = [...this.state.tabs].sort((a, b) => a.index - b.index);
-    const verifiedTabs = sortedTabs.filter((tab) => validateVideoMerge(tab).valid);
-    const incompleteTabs = sortedTabs.filter((tab) => !validateVideoMerge(tab).valid && tab.parts.some((p) => p.status === 'done' && p.content));
+    const tabsToExport = sortedTabs.filter((tab) =>
+      tab.parts.some((p) => (p.status === 'done' || (p.content && p.content.trim().length > 20)) && !detectOutlineInText(p.content).isOutline)
+    );
     const includedVideoIds: string[] = [];
 
-    if (verifiedTabs.length === 0) {
-      const missingDetails = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
-      alert(`⛔ MERGE INCOMPLETE — No videos have all required parts completed:\n\n${missingDetails || 'No completed videos found.'}\n\nAll required parts must be completed before downloading ZIP bundle.`);
+    if (tabsToExport.length === 0) {
+      alert('No scripts or completed parts available to download yet. Please generate parts first.');
       return;
     }
 
-    if (incompleteTabs.length > 0) {
-      const skippedList = incompleteTabs.map((t) => `${t.id}: ${validateVideoMerge(t).statusLabel}`).join('\n');
-      alert(`⚠️ Notice: The following videos are INCOMPLETE and skipped from ZIP bundle:\n\n${skippedList}\n\nOnly 100% verified complete videos will be included.`);
-    }
-
-    verifiedTabs.forEach((tab) => {
-      const doneParts = tab.parts.filter((p) => p.status === 'done' && p.content && p.content.trim() && !detectOutlineInText(p.content).isOutline);
+    tabsToExport.forEach((tab) => {
+      const doneParts = tab.parts.filter((p) => (p.status === 'done' || (p.content && p.content.trim().length > 20)) && !detectOutlineInText(p.content).isOutline);
       if (doneParts.length > 0) {
         doneParts.sort((a, b) => a.partNumber - b.partNumber);
         includedVideoIds.push(tab.id);
