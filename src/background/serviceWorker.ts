@@ -506,56 +506,105 @@ class BackgroundServiceWorker {
         const targetTabs = this.getTargetTabs(target);
         let count = 0;
         let skippedAlreadyPushed = 0;
+        let failedCount = 0;
+
         for (const tab of targetTabs) {
           if (!tab.chromeTabId || !tab.title) continue;
 
-          // Track which titles have already been pushed and prevent duplicate pushes
-          if (tab.titlePushed && tab.pushedTitleText === tab.title) {
+          // Duplicate prevention: If already verified pasted and title unchanged, skip unless forced
+          if (!message.force && tab.titlePushStatus === 'pasted' && tab.pushedTitleText === tab.title) {
             skippedAlreadyPushed++;
-            this.addLog('INFO', `${tab.id}: Title already pushed once ("${tab.title}"). Skipping duplicate push.`, tab.id);
+            this.addLog('INFO', `${tab.id}: Title already verified pasted ("${tab.title}"). Skipping duplicate push.`, tab.id);
             continue;
           }
 
-          tab.titleInjected = true;
-          tab.titlePushed = true;
-          tab.pushedTitleText = tab.title;
-          tab.promptInjected = Boolean(tab.masterPrompt || this.state.config.masterPrompt);
+          tab.titlePushStatus = 'pasting';
+          try {
+            const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+              type: 'PASTE_PROMPT_ONLY',
+              title: tab.title,
+              masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
+              vNumber: tab.id
+            });
+
+            if (resp && (resp.verified || resp.success)) {
+              tab.titleInjected = true;
+              tab.titlePushed = true;
+              tab.titlePushStatus = 'pasted';
+              tab.titleVerified = true;
+              tab.pushedTitleText = tab.title;
+              tab.verifiedTitleText = tab.title;
+              count++;
+            } else {
+              tab.titlePushStatus = 'failed';
+              tab.titleVerified = false;
+              failedCount++;
+              this.addLog('ERROR', `${tab.id}: Title paste failed verification: ${resp?.error || 'Verification failed'}`, tab.id);
+            }
+          } catch (err: any) {
+            tab.titlePushStatus = 'failed';
+            tab.titleVerified = false;
+            failedCount++;
+            this.addLog('ERROR', `${tab.id}: Could not connect to tab to push title (${err.message}).`, tab.id);
+          }
+
           this.recalculateTabStatus(tab);
-          chrome.tabs.sendMessage(tab.chromeTabId, {
-            type: 'PASTE_PROMPT_ONLY',
-            title: tab.title,
-            masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
-            vNumber: tab.id
-          }).catch(() => {});
           chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
-          count++;
         }
-        this.addLog('INFO', `Push Titles: Pushed ${count} titles (${target}). Skipped ${skippedAlreadyPushed} already pushed.`);
+
+        this.addLog('INFO', `Push Titles: Verified ${count} titles, ${failedCount} failed, ${skippedAlreadyPushed} skipped.`);
         await this.persist();
-        return { success: true, count, skipped: skippedAlreadyPushed, tabs: this.state.tabs };
+        return { success: true, count, failed: failedCount, skipped: skippedAlreadyPushed, tabs: this.state.tabs };
       }
 
       case 'PUSH_PROMPT_TO_CHATS': {
         const target = message.target || 'all';
         const targetTabs = this.getTargetTabs(target);
         let count = 0;
+        let failedCount = 0;
+        let skippedCount = 0;
+
         for (const tab of targetTabs) {
-          if (tab.chromeTabId) {
-            tab.promptInjected = true;
-            this.recalculateTabStatus(tab);
-            chrome.tabs.sendMessage(tab.chromeTabId, {
-              type: 'PASTE_PROMPT_ONLY',
-              title: tab.title,
-              masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
-              vNumber: tab.id
-            }).catch(() => {});
-            chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
-            count++;
+          if (!tab.chromeTabId) continue;
+          const prompt = tab.masterPrompt || this.state.config.masterPrompt;
+          if (!prompt) continue;
+
+          if (!message.force && tab.masterPromptStatus === 'sent') {
+            skippedCount++;
+            continue;
           }
+
+          tab.masterPromptStatus = 'sending';
+          try {
+            const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+              type: 'PASTE_MASTER_PROMPT_ONLY',
+              masterPrompt: prompt,
+              vNumber: tab.id
+            });
+
+            if (resp && (resp.verified || resp.success)) {
+              tab.promptInjected = true;
+              tab.masterPromptStatus = 'sent';
+              tab.masterPromptVerified = true;
+              count++;
+            } else {
+              tab.masterPromptStatus = 'failed';
+              tab.masterPromptVerified = false;
+              failedCount++;
+            }
+          } catch (err: any) {
+            tab.masterPromptStatus = 'failed';
+            tab.masterPromptVerified = false;
+            failedCount++;
+          }
+
+          this.recalculateTabStatus(tab);
+          chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
         }
-        this.addLog('INFO', `Push Prompt: Injected master prompt into ${count} Qwen chats (${target}).`);
+
+        this.addLog('INFO', `Push Prompt: Verified sent ${count} tabs, ${failedCount} failed, ${skippedCount} skipped.`);
         await this.persist();
-        return { success: true, count, tabs: this.state.tabs };
+        return { success: true, count, failed: failedCount, skipped: skippedCount, tabs: this.state.tabs };
       }
 
       case 'PUSH_THUMBNAILS_TO_CHATS':
@@ -563,30 +612,62 @@ class BackgroundServiceWorker {
         const target = message.target || 'all';
         const targetTabs = this.getTargetTabs(target);
         let count = 0;
+        let failedCount = 0;
+        let skippedCount = 0;
+
         for (const tab of targetTabs) {
-          if (tab.chromeTabId && tab.thumbnailId) {
-            const assetRecord = await getAssetBlob(tab.thumbnailId);
-            if (assetRecord) {
-              const base64 = await this.blobToBase64(assetRecord.blob);
-              tab.thumbnailPasted = true;
-              this.recalculateTabStatus(tab);
-              chrome.tabs.sendMessage(tab.chromeTabId, {
-                type: 'PASTE_THUMBNAIL_ONLY',
-                thumbnail: {
-                  name: assetRecord.asset.name || `${tab.id}_thumb`,
-                  type: assetRecord.asset.type,
-                  base64
-                },
-                vNumber: tab.id
-              }).catch(() => {});
-              chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
-              count++;
-            }
+          if (!tab.chromeTabId || !tab.thumbnailId) continue;
+
+          // Duplicate prevention
+          if (!message.force && tab.thumbnailPushStatus === 'pasted') {
+            skippedCount++;
+            this.addLog('INFO', `${tab.id}: Thumbnail already verified pasted. Skipping duplicate push.`, tab.id);
+            continue;
           }
+
+          const assetRecord = await getAssetBlob(tab.thumbnailId);
+          if (!assetRecord) {
+            tab.thumbnailPushStatus = 'failed';
+            failedCount++;
+            continue;
+          }
+
+          tab.thumbnailPushStatus = 'uploading';
+          try {
+            const base64 = await this.blobToBase64(assetRecord.blob);
+            const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+              type: 'PASTE_THUMBNAIL_ONLY',
+              thumbnail: {
+                name: assetRecord.asset.name || `${tab.id}_thumb`,
+                type: assetRecord.asset.type,
+                base64
+              },
+              vNumber: tab.id
+            });
+
+            if (resp && (resp.verified || resp.success)) {
+              tab.thumbnailPasted = true;
+              tab.thumbnailPushStatus = 'pasted';
+              tab.thumbnailVerified = true;
+              count++;
+            } else {
+              tab.thumbnailPushStatus = 'failed';
+              tab.thumbnailVerified = false;
+              failedCount++;
+            }
+          } catch (err: any) {
+            tab.thumbnailPushStatus = 'failed';
+            tab.thumbnailVerified = false;
+            failedCount++;
+          }
+
+          this.recalculateTabStatus(tab);
+          chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
         }
-        this.addLog('INFO', `Stage 2 / Push Thumbnails: Dispatched clipboard paste to ${count} Qwen chats (${target}).`);
+
+        this.addLog('INFO', `Push Thumbnails: Verified ${count}, ${failedCount} failed, ${skippedCount} skipped.`);
         await this.persist();
-        return { success: true, count, tabs: this.state.tabs };
+        return { success: true, count, failed: failedCount, skipped: skippedCount, tabs: this.state.tabs };
       }
 
       case 'PUSH_SCRIPTS_TO_CHATS':
@@ -594,8 +675,17 @@ class BackgroundServiceWorker {
         const target = message.target || 'all';
         const targetTabs = this.getTargetTabs(target);
         let count = 0;
+        let failedCount = 0;
+        let skippedCount = 0;
+
         for (const tab of targetTabs) {
           if (!tab.chromeTabId) continue;
+
+          if (!message.force && tab.scriptPushStatus === 'pasted') {
+            skippedCount++;
+            continue;
+          }
+
           let scriptContent = '';
           let scriptName = `${tab.id}_script.txt`;
 
@@ -610,80 +700,146 @@ class BackgroundServiceWorker {
             scriptName = `${tab.id}_Competitor_Script.txt`;
           }
 
-          if (scriptContent) {
-            tab.scriptInjected = true;
-            this.recalculateTabStatus(tab);
-            chrome.tabs.sendMessage(tab.chromeTabId, {
+          if (!scriptContent) continue;
+
+          tab.scriptPushStatus = 'uploading';
+          try {
+            const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
               type: 'PASTE_SCRIPT_ONLY',
               script: {
                 name: scriptName,
                 content: scriptContent
               },
               vNumber: tab.id
-            }).catch(() => {});
-            chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
-            count++;
+            });
+
+            if (resp && (resp.verified || resp.success)) {
+              tab.scriptInjected = true;
+              tab.scriptPushStatus = 'pasted';
+              tab.scriptVerified = true;
+              count++;
+            } else {
+              tab.scriptPushStatus = 'failed';
+              tab.scriptVerified = false;
+              failedCount++;
+            }
+          } catch (err: any) {
+            tab.scriptPushStatus = 'failed';
+            tab.scriptVerified = false;
+            failedCount++;
           }
+
+          this.recalculateTabStatus(tab);
+          chrome.tabs.sendMessage(tab.chromeTabId, { type: 'UPDATE_HUD', tab }).catch(() => {});
         }
-        this.addLog('INFO', `Stage 3 / Push Scripts: Embedded competitor scripts into ${count} Qwen chats (${target}).`);
+
+        this.addLog('INFO', `Push Scripts: Verified ${count}, ${failedCount} failed, ${skippedCount} skipped.`);
         await this.persist();
-        return { success: true, count, tabs: this.state.tabs };
+        return { success: true, count, failed: failedCount, skipped: skippedCount, tabs: this.state.tabs };
       }
 
       case 'PUSH_ALL_ASSETS_TO_CHATS': {
         const target = message.target || 'all';
         const targetTabs = this.getTargetTabs(target);
         let count = 0;
+
         for (const tab of targetTabs) {
           if (!tab.chromeTabId) continue;
 
-          // 1. Push Title & Prompt (ONLY if not already pushed once!)
-          if (tab.title && (!tab.titlePushed || tab.pushedTitleText !== tab.title)) {
-            tab.titleInjected = true;
-            tab.titlePushed = true;
-            tab.pushedTitleText = tab.title;
-            tab.promptInjected = Boolean(tab.masterPrompt || this.state.config.masterPrompt);
-            chrome.tabs.sendMessage(tab.chromeTabId, {
-              type: 'PASTE_PROMPT_ONLY',
-              title: tab.title,
-              masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
-              vNumber: tab.id
-            }).catch(() => {});
+          // 1. Push Title (ONLY if not already verified pasted!)
+          if (tab.title && (tab.titlePushStatus !== 'pasted' || tab.pushedTitleText !== tab.title)) {
+            tab.titlePushStatus = 'pasting';
+            try {
+              const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+                type: 'PASTE_PROMPT_ONLY',
+                title: tab.title,
+                masterPrompt: tab.masterPrompt || this.state.config.masterPrompt,
+                vNumber: tab.id
+              });
+              if (resp && (resp.verified || resp.success)) {
+                tab.titleInjected = true;
+                tab.titlePushed = true;
+                tab.titlePushStatus = 'pasted';
+                tab.titleVerified = true;
+                tab.pushedTitleText = tab.title;
+                tab.verifiedTitleText = tab.title;
+              } else {
+                tab.titlePushStatus = 'failed';
+                tab.titleVerified = false;
+              }
+            } catch {
+              tab.titlePushStatus = 'failed';
+              tab.titleVerified = false;
+            }
           }
 
           // 2. Push Thumbnail
-          if (tab.thumbnailId) {
+          if (tab.thumbnailId && tab.thumbnailPushStatus !== 'pasted') {
             const assetRecord = await getAssetBlob(tab.thumbnailId);
             if (assetRecord) {
               const base64 = await this.blobToBase64(assetRecord.blob);
-              tab.thumbnailPasted = true;
-              chrome.tabs.sendMessage(tab.chromeTabId, {
-                type: 'PASTE_THUMBNAIL_ONLY',
-                thumbnail: {
-                  name: assetRecord.asset.name || `${tab.id}_thumb`,
-                  type: assetRecord.asset.type,
-                  base64
-                },
-                vNumber: tab.id
-              }).catch(() => {});
+              tab.thumbnailPushStatus = 'uploading';
+              try {
+                const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+                  type: 'PASTE_THUMBNAIL_ONLY',
+                  thumbnail: {
+                    name: assetRecord.asset.name || `${tab.id}_thumb`,
+                    type: assetRecord.asset.type,
+                    base64
+                  },
+                  vNumber: tab.id
+                });
+                if (resp && (resp.verified || resp.success)) {
+                  tab.thumbnailPasted = true;
+                  tab.thumbnailPushStatus = 'pasted';
+                  tab.thumbnailVerified = true;
+                } else {
+                  tab.thumbnailPushStatus = 'failed';
+                  tab.thumbnailVerified = false;
+                }
+              } catch {
+                tab.thumbnailPushStatus = 'failed';
+                tab.thumbnailVerified = false;
+              }
             }
           }
 
           // 3. Push Competitor Script
-          if (tab.scriptId) {
+          if (tab.scriptId && tab.scriptPushStatus !== 'pasted') {
             const assetRecord = await getAssetBlob(tab.scriptId);
             if (assetRecord) {
               const scriptContent = await assetRecord.blob.text();
-              tab.scriptInjected = true;
-              chrome.tabs.sendMessage(tab.chromeTabId, {
-                type: 'PASTE_SCRIPT_ONLY',
-                script: {
-                  name: assetRecord.asset.name || `${tab.id}_script.txt`,
-                  content: scriptContent
-                },
-                vNumber: tab.id
-              }).catch(() => {});
+              tab.scriptPushStatus = 'uploading';
+              try {
+                const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+                  type: 'PASTE_SCRIPT_ONLY',
+                  script: {
+                    name: assetRecord.asset.name || `${tab.id}_script.txt`,
+                    content: scriptContent
+                  },
+                  vNumber: tab.id
+                });
+                if (resp && (resp.verified || resp.success)) {
+                  tab.scriptInjected = true;
+                  tab.scriptPushStatus = 'pasted';
+                  tab.scriptVerified = true;
+                } else {
+                  tab.scriptPushStatus = 'failed';
+                  tab.scriptVerified = false;
+                }
+              } catch {
+                tab.scriptPushStatus = 'failed';
+                tab.scriptVerified = false;
+              }
             }
+          }
+
+          // 4. Mark Master Prompt sent if included in prompt or separate
+          const prompt = tab.masterPrompt || this.state.config.masterPrompt;
+          if (prompt && tab.titlePushStatus === 'pasted') {
+            tab.promptInjected = true;
+            tab.masterPromptStatus = 'sent';
+            tab.masterPromptVerified = true;
           }
 
           this.recalculateTabStatus(tab);
@@ -691,7 +847,7 @@ class BackgroundServiceWorker {
           count++;
         }
 
-        this.addLog('INFO', `All Pushing: Pushed all 4 assets into ${count} Qwen chats (${target}).`);
+        this.addLog('INFO', `Push All Assets: Completed for ${count} tabs (${target}).`);
         await this.persist();
         return { success: true, count, tabs: this.state.tabs };
       }
@@ -706,7 +862,10 @@ class BackgroundServiceWorker {
           t.title = '';
           t.titleInjected = false;
           t.titlePushed = false;
+          t.titlePushStatus = 'none';
+          t.titleVerified = false;
           t.pushedTitleText = undefined;
+          t.verifiedTitleText = undefined;
           this.recalculateTabStatus(t);
         });
         this.addLog('INFO', 'Cleared all assigned titles.');
@@ -1348,7 +1507,10 @@ class BackgroundServiceWorker {
             matchedTab.title = title;
             matchedTab.titleInjected = false;
             matchedTab.titlePushed = false;
+            matchedTab.titlePushStatus = 'none';
+            matchedTab.titleVerified = false;
             matchedTab.pushedTitleText = undefined;
+            matchedTab.verifiedTitleText = undefined;
           }
           this.recalculateTabStatus(matchedTab);
           this.addLog('INFO', `Title assigned to ${matchedTab.id}: "${matchedTab.title}"`, matchedTab.id);
@@ -1368,7 +1530,10 @@ class BackgroundServiceWorker {
           tab.title = newTitle;
           tab.titleInjected = false;
           tab.titlePushed = false;
+          tab.titlePushStatus = 'none';
+          tab.titleVerified = false;
           tab.pushedTitleText = undefined;
+          tab.verifiedTitleText = undefined;
         }
         this.recalculateTabStatus(tab);
         this.addLog('INFO', `Title assigned to ${tab.id}: "${tab.title}"`, tab.id);
@@ -1397,7 +1562,7 @@ class BackgroundServiceWorker {
     }
 
     // Auto-prepare: If any tab has assigned assets that haven't been pushed to chat yet,
-    // automatically push them so they are verified and confirmed in the chat!
+    // automatically push and verify them!
     for (const tab of targetTabs) {
       if (!tab.chromeTabId) continue;
       const globalPrompt = this.state.config.masterPrompt || '';
@@ -1405,40 +1570,55 @@ class BackgroundServiceWorker {
         tab.masterPrompt = globalPrompt;
       }
 
-      // Auto-push Title & Prompt ONLY if not already pushed once!
-      if (tab.title && (!tab.titlePushed || tab.pushedTitleText !== tab.title)) {
-        tab.titleInjected = true;
-        tab.titlePushed = true;
-        tab.pushedTitleText = tab.title;
-        tab.promptInjected = true;
-        chrome.tabs.sendMessage(tab.chromeTabId, {
-          type: 'PASTE_PROMPT_ONLY',
-          title: tab.title,
-          masterPrompt: tab.masterPrompt || globalPrompt,
-          vNumber: tab.id
-        }).catch(() => {});
+      // Auto-push Title & Prompt ONLY if not already verified pasted!
+      if (tab.title && (tab.titlePushStatus !== 'pasted' || tab.pushedTitleText !== tab.title)) {
+        try {
+          const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+            type: 'PASTE_PROMPT_ONLY',
+            title: tab.title,
+            masterPrompt: tab.masterPrompt || globalPrompt,
+            vNumber: tab.id
+          });
+          if (resp && (resp.verified || resp.success)) {
+            tab.titleInjected = true;
+            tab.titlePushed = true;
+            tab.titlePushStatus = 'pasted';
+            tab.titleVerified = true;
+            tab.pushedTitleText = tab.title;
+            tab.verifiedTitleText = tab.title;
+            tab.promptInjected = true;
+            tab.masterPromptStatus = 'sent';
+            tab.masterPromptVerified = true;
+          }
+        } catch {}
       }
 
       // Auto-push Thumbnail if assigned and not yet pasted
-      if (tab.thumbnailId && !tab.thumbnailPasted) {
+      if (tab.thumbnailId && tab.thumbnailPushStatus !== 'pasted') {
         const assetRecord = await getAssetBlob(tab.thumbnailId);
         if (assetRecord) {
           const base64 = await this.blobToBase64(assetRecord.blob);
-          tab.thumbnailPasted = true;
-          chrome.tabs.sendMessage(tab.chromeTabId, {
-            type: 'PASTE_THUMBNAIL_ONLY',
-            thumbnail: {
-              name: assetRecord.asset.name || `${tab.id}_thumb`,
-              type: assetRecord.asset.type,
-              base64
-            },
-            vNumber: tab.id
-          }).catch(() => {});
+          try {
+            const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+              type: 'PASTE_THUMBNAIL_ONLY',
+              thumbnail: {
+                name: assetRecord.asset.name || `${tab.id}_thumb`,
+                type: assetRecord.asset.type,
+                base64
+              },
+              vNumber: tab.id
+            });
+            if (resp && (resp.verified || resp.success)) {
+              tab.thumbnailPasted = true;
+              tab.thumbnailPushStatus = 'pasted';
+              tab.thumbnailVerified = true;
+            }
+          } catch {}
         }
       }
 
       // Auto-push Competitor Script if present and not yet embedded
-      if (!tab.scriptInjected) {
+      if (tab.scriptPushStatus !== 'pasted') {
         let scriptContent = '';
         let scriptName = `${tab.id}_script.txt`;
 
@@ -1454,15 +1634,21 @@ class BackgroundServiceWorker {
         }
 
         if (scriptContent) {
-          tab.scriptInjected = true;
-          chrome.tabs.sendMessage(tab.chromeTabId, {
-            type: 'PASTE_SCRIPT_ONLY',
-            script: {
-              name: scriptName,
-              content: scriptContent
-            },
-            vNumber: tab.id
-          }).catch(() => {});
+          try {
+            const resp = await chrome.tabs.sendMessage(tab.chromeTabId, {
+              type: 'PASTE_SCRIPT_ONLY',
+              script: {
+                name: scriptName,
+                content: scriptContent
+              },
+              vNumber: tab.id
+            });
+            if (resp && (resp.verified || resp.success)) {
+              tab.scriptInjected = true;
+              tab.scriptPushStatus = 'pasted';
+              tab.scriptVerified = true;
+            }
+          } catch {}
         }
       }
 

@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Meta.ai Assistant Dashboard</title>
   <script type="module" crossorigin src="./assets/modulepreload-polyfill-B5Qt9EMX.js"></script>
-  <script type="module" crossorigin src="./assets/normalizer-hPn34PGC.js"></script>
+  <script type="module" crossorigin src="./assets/normalizer-BOWm20UX.js"></script>
   <script type="module" crossorigin src="./assets/partDetector-CmRl1SmH.js"></script>
-  <script type="module" crossorigin src="./assets/dashboard-DM9VJYoB.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/normalizer-DNN4QJpa.css">
+  <script type="module" crossorigin src="./assets/dashboard-BrNmUfb_.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/normalizer-BMGljvCa.css">
 </head>
 <body>
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
       <div class="header-left">
-        <span class="logo-badge">META v3.9</span>
+        <span class="logo-badge">META v4.0</span>
         <div class="header-title">
           <h1>Meta.ai Chrome Assistant</h1>
           <p>Autonomous Multi-Tab Video Script Automation & Orchestrator</p>
@@ -163,11 +163,11 @@
       </div>
     </section>
 
-    <!-- Section 2: TAB MANAGER -->
+    <!-- Section 2: TAB MANAGER & 4-ASSET VERIFICATION SYSTEM -->
     <section class="section-card">
       <div class="section-header" data-toggle="sec-tab-manager">
         <div class="section-title">
-          <span>2. TAB MANAGER</span>
+          <span>2. TAB MANAGER & 4-ASSET VERIFICATION SYSTEM</span>
           <span class="section-badge" id="tab-count-badge">0 Tabs</span>
         </div>
         <span>▼</span>
@@ -222,17 +222,30 @@
           </div>
         </div>
 
-        <div class="table-container">
+        <!-- View Mode Switcher -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 6px 12px; background: rgba(15, 23, 42, 0.6); border-radius: 6px; border: 1px solid var(--border);">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="font-weight: 700; font-size: 11px; color: #94a3b8; text-transform: uppercase;">View Mode:</span>
+            <button id="btn-view-table" class="btn btn-sm btn-primary" style="font-weight: 600;">📋 Table View</button>
+            <button id="btn-view-vcard" class="btn btn-sm" style="font-weight: 600;">🔍 4-Asset Verification Checklist (V1..Vn)</button>
+          </div>
+          <div id="vcard-global-summary" style="font-size: 11px; font-weight: 700; color: #4ade80; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); padding: 3px 10px; border-radius: 12px;">
+            Verified in Chat: 0 / 0
+          </div>
+        </div>
+
+        <!-- View 1: Table View -->
+        <div id="view-table-container" class="table-container">
           <table>
             <thead>
               <tr>
                 <th style="width: 32px;"><input type="checkbox" id="chk-table-master" /></th>
                 <th>ID</th>
                 <th class="col-hide-compact">Tab ID</th>
-                <th>Title</th>
-                <th>Thumbnail</th>
-                <th>Script</th>
-                <th>Status</th>
+                <th>Title Verification</th>
+                <th>Thumbnail Verification</th>
+                <th>Script Verification</th>
+                <th>Prompt & In-Chat Status</th>
                 <th>Parts</th>
                 <th>Actions</th>
               </tr>
@@ -245,6 +258,11 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- View 2: 4-Asset Verification Cards View -->
+        <div id="view-vcard-container" style="display: none;">
+          <div id="verification-cards-grid" class="vcard-grid"></div>
         </div>
       </div>
     </section>

@@ -70,18 +70,27 @@ export interface VTab {
   title: string;
   titleInjected?: boolean;
   titlePushed?: boolean;
+  titlePushStatus?: 'none' | 'pasting' | 'pasted' | 'failed';
+  titleVerified?: boolean;
   pushedTitleText?: string;
+  verifiedTitleText?: string;
   masterPrompt: string;
   promptInjected?: boolean;
+  masterPromptStatus?: 'none' | 'sending' | 'sent' | 'failed';
+  masterPromptVerified?: boolean;
   thumbnailId?: string;
   thumbnailName?: string;
   thumbnailStatus: 'none' | 'assigned' | 'uploaded';
+  thumbnailPushStatus?: 'none' | 'uploading' | 'pasted' | 'failed';
   thumbnailPasted?: boolean;
+  thumbnailVerified?: boolean;
   thumbnailUploading?: boolean;
   scriptId?: string;
   scriptName?: string;
   scriptStatus: 'none' | 'assigned' | 'uploaded';
+  scriptPushStatus?: 'none' | 'uploading' | 'pasted' | 'failed';
   scriptInjected?: boolean;
+  scriptVerified?: boolean;
   scriptOptional?: boolean;  // When true, skip script requirement check
   totalParts: number;
   currentPart: number;

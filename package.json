@@ -1,6 +1,6 @@
 {
   "name": "meta-ai-chrome-assistant-extension",
-  "version": "3.9.0",
+  "version": "4.0.0",
   "description": "Production-ready Chrome Extension for automating and managing multiple Meta.ai chat tabs.",
   "type": "module",
   "scripts": {

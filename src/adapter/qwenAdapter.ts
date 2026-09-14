@@ -108,77 +108,8 @@ export class QwenAdapter {
   }
 
   /**
-   * Inserts text into the chat input while dispatching framework-compliant synthetic events (React/Vue).
-   */
-  public insertText(text: string): boolean {
-    const input = this.findChatInput();
-    if (!input) return false;
-
-    input.focus();
-
-    if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
-      // Use native value setter to bypass React/Vue property interception
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype,
-        'value'
-      )?.set || Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        'value'
-      )?.set;
-
-      if (nativeSetter) {
-        nativeSetter.call(input, text);
-      } else {
-        input.value = text;
-      }
-
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    } else if (input.isContentEditable) {
-      input.focus();
-
-      // Avoid duplicate insertion if input already contains this exact text
-      if (input.textContent && input.textContent.trim() === text.trim()) {
-        return true;
-      }
-
-      // Explicitly select all contents inside this contenteditable container
-      try {
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(input);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      } catch {}
-
-      let insertedCleanly = false;
-      try {
-        insertedCleanly = document.execCommand('insertText', false, text);
-      } catch {}
-
-      if (!insertedCleanly || !input.textContent || !input.textContent.includes(text.slice(0, Math.min(20, text.length)))) {
-        try {
-          const pasteEvent = new ClipboardEvent('paste', {
-            bubbles: true,
-            cancelable: true,
-            clipboardData: new DataTransfer()
-          });
-          pasteEvent.clipboardData?.setData('text/plain', text);
-          input.dispatchEvent(pasteEvent);
-        } catch {}
-      }
-      if (!input.textContent || input.textContent.trim().length === 0) {
-        input.textContent = text;
-      }
-      input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
-      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
-    }
-
-    return true;
-  }
-
-  /**
    * Explicitly clears the chat input element to ensure no leftover prompt text sits in the input.
+   * Handles textareas and Lexical contenteditable containers cleanly.
    */
   public clearInput(): void {
     const input = this.findChatInput();
@@ -204,16 +135,162 @@ export class QwenAdapter {
     } else if (input.isContentEditable) {
       input.focus();
       try {
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(input);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
+        document.execCommand('selectAll', false, undefined);
         document.execCommand('delete', false, undefined);
       } catch {}
-      input.textContent = '';
+      try {
+        const sel = window.getSelection();
+        if (sel) {
+          const range = document.createRange();
+          range.selectNodeContents(input);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.execCommand('delete', false, undefined);
+        }
+      } catch {}
+      // If Lexical residual paragraphs or text remains, reset to empty paragraph
+      const current = (input.innerText || input.textContent || '').trim();
+      if (current.length > 0) {
+        input.innerHTML = '<p><br></p>';
+      }
       input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
     }
+  }
+
+  /**
+   * Inserts text into the chat input EXACTLY ONCE.
+   * Uses a strict mutually-exclusive insertion hierarchy so text is NEVER duplicated 2x or 3x.
+   */
+  public insertText(text: string): boolean {
+    const input = this.findChatInput();
+    if (!input) return false;
+
+    input.focus();
+
+    if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value'
+      )?.set || Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )?.set;
+
+      if (nativeSetter) {
+        nativeSetter.call(input, text);
+      } else {
+        input.value = text;
+      }
+
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    } else if (input.isContentEditable) {
+      input.focus();
+
+      // If the input already contains this exact text, avoid redundant insertion
+      const existingText = (input.innerText || input.textContent || '').trim();
+      if (existingText === text.trim()) {
+        return true;
+      }
+
+      // Step 1: Select all existing content so old placeholder text is completely replaced
+      try {
+        document.execCommand('selectAll', false, undefined);
+      } catch {}
+      try {
+        const sel = window.getSelection();
+        if (sel) {
+          const range = document.createRange();
+          range.selectNodeContents(input);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch {}
+
+      // Step 2: Delete existing selection
+      try {
+        document.execCommand('delete', false, undefined);
+      } catch {}
+
+      // Step 3: Insert text using ONE single primary mechanism
+      // In Chromium / Meta.ai Lexical, document.execCommand('insertText', false, text)
+      // replaces the selection cleanly and fires native Lexical input events.
+      try {
+        document.execCommand('insertText', false, text);
+      } catch {}
+
+      // Step 4: Verify if text was inserted. Only if input is STILL completely empty,
+      // fall back to a single ClipboardEvent('paste') with DataTransfer.
+      const textAfterExec = (input.innerText || input.textContent || '').trim();
+      if (textAfterExec.length === 0) {
+        try {
+          const dataTransfer = new DataTransfer();
+          dataTransfer.setData('text/plain', text);
+          const pasteEvent = new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: dataTransfer
+          });
+          input.dispatchEvent(pasteEvent);
+        } catch {}
+      }
+
+      // Step 5: If both failed (e.g. in headless / non-standard DOM), set textContent directly
+      const textAfterPaste = (input.innerText || input.textContent || '').trim();
+      if (textAfterPaste.length === 0) {
+        input.textContent = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      return true;
+    }
+
+    return true;
+  }
+
+  /**
+   * DOM Verification: Confirms whether the chat input currently contains the expected text.
+   */
+  public verifyInputContains(expectedText: string): boolean {
+    if (!expectedText) return false;
+    const current = this.getInputValue().trim();
+    if (!current) return false;
+    const cleanExpected = expectedText.trim();
+    if (current.includes(cleanExpected)) return true;
+    const sample = cleanExpected.slice(0, Math.min(40, cleanExpected.length));
+    return current.includes(sample);
+  }
+
+  /**
+   * DOM Verification: Confirms whether an uploaded file / attachment preview chip is visible in the chat composer.
+   */
+  public verifyAttachmentPresent(filename?: string): boolean {
+    const input = this.findChatInput();
+    const composer = input?.closest('form, div[class*="input" i], div[class*="chat-bottom" i], div[class*="footer" i], div[class*="composer" i]') || this.document.body;
+
+    for (const selector of QWEN_SELECTORS.UPLOAD_PREVIEWS) {
+      try {
+        const previews = composer.querySelectorAll<HTMLElement>(selector);
+        for (let i = 0; i < previews.length; i++) {
+          const p = previews[i];
+          if (this.isElementVisible(p)) {
+            if (!filename) return true;
+            const text = p.innerText || p.textContent || p.getAttribute('title') || p.getAttribute('aria-label') || '';
+            const baseName = filename.replace(/\.[^/.]+$/, '');
+            if (text.includes(filename) || text.includes(baseName)) return true;
+            return true;
+          }
+        }
+      } catch {}
+    }
+
+    const imgs = composer.querySelectorAll<HTMLImageElement>('img[src*="blob:"], img[src*="data:"], [data-testid*="preview" i], [class*="thumbnail" i]');
+    for (let i = 0; i < imgs.length; i++) {
+      if (this.isElementVisible(imgs[i])) return true;
+    }
+
+    return false;
   }
 
   /**

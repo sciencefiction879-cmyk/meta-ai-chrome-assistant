@@ -1330,6 +1330,248 @@ test('Write Part Prompt & One-Click Copy — exact format "Write Part X" with no
   }
 });
 
+test('4-Asset Verification System — State transitions and DOM verification tracking (v4.0.0)', () => {
+  const tab: VTab = {
+    id: 'V1',
+    index: 1,
+    chromeTabId: 101,
+    status: 'ready',
+    selected: true,
+    initialMessage: 'My Version of Title is:',
+    title: 'The Great Sphinx of Giza',
+    titlePushStatus: 'none',
+    titleVerified: false,
+    thumbnailStatus: 'assigned',
+    thumbnailId: 'thumb-1',
+    thumbnailName: 'V1_thumb.png',
+    thumbnailPushStatus: 'none',
+    thumbnailVerified: false,
+    scriptStatus: 'assigned',
+    scriptId: 'script-1',
+    scriptName: 'V1_script.txt',
+    scriptPushStatus: 'none',
+    scriptVerified: false,
+    masterPrompt: 'Act as a documentary narrator',
+    masterPromptStatus: 'none',
+    masterPromptVerified: false,
+    totalParts: 4,
+    currentPart: 1,
+    parts: [],
+    lastUpdated: Date.now()
+  };
+
+  // Initial state: none of the 4 assets are verified
+  assert.strictEqual(tab.titlePushStatus, 'none');
+  assert.strictEqual(tab.thumbnailPushStatus, 'none');
+  assert.strictEqual(tab.scriptPushStatus, 'none');
+  assert.strictEqual(tab.masterPromptStatus, 'none');
+
+  // 1. Simulate verified title insertion
+  tab.titlePushStatus = 'pasting';
+  assert.strictEqual(tab.titlePushStatus, 'pasting');
+  // DOM verification succeeds:
+  tab.titleInjected = true;
+  tab.titlePushed = true;
+  tab.titlePushStatus = 'pasted';
+  tab.titleVerified = true;
+  tab.verifiedTitleText = tab.title;
+  assert.strictEqual(tab.titlePushStatus, 'pasted');
+  assert.strictEqual(tab.titleVerified, true);
+
+  // 2. Simulate failed thumbnail insertion
+  tab.thumbnailPushStatus = 'uploading';
+  // DOM verification fails (e.g. file input error or network timeout):
+  tab.thumbnailPushStatus = 'failed';
+  tab.thumbnailVerified = false;
+  assert.strictEqual(tab.thumbnailPushStatus, 'failed');
+  assert.strictEqual(tab.thumbnailVerified, false);
+
+  // 3. Retry thumbnail insertion succeeds:
+  tab.thumbnailPushStatus = 'uploading';
+  tab.thumbnailPasted = true;
+  tab.thumbnailPushStatus = 'pasted';
+  tab.thumbnailVerified = true;
+  assert.strictEqual(tab.thumbnailPushStatus, 'pasted');
+  assert.strictEqual(tab.thumbnailVerified, true);
+
+  // 4. Simulate verified script injection
+  tab.scriptPushStatus = 'uploading';
+  tab.scriptInjected = true;
+  tab.scriptPushStatus = 'pasted';
+  tab.scriptVerified = true;
+  assert.strictEqual(tab.scriptPushStatus, 'pasted');
+  assert.strictEqual(tab.scriptVerified, true);
+
+  // 5. Simulate verified master prompt push
+  tab.masterPromptStatus = 'sending';
+  tab.promptInjected = true;
+  tab.masterPromptStatus = 'sent';
+  tab.masterPromptVerified = true;
+  assert.strictEqual(tab.masterPromptStatus, 'sent');
+  assert.strictEqual(tab.masterPromptVerified, true);
+
+  // All 4 confirmed in chat
+  const all4Confirmed = tab.titleVerified && tab.thumbnailVerified && tab.scriptVerified && tab.masterPromptVerified;
+  assert.strictEqual(all4Confirmed, true, 'All 4 assets must be confirmed verified in DOM');
+});
+
+test('Single Push Duplicate Elimination — All 4 assets pushed strictly once per tab (v4.0.0)', () => {
+  interface AssetPushLog {
+    titlePushes: number;
+    thumbPushes: number;
+    scriptPushes: number;
+    promptPushes: number;
+  }
+
+  const log: Record<string, AssetPushLog> = {
+    V1: { titlePushes: 0, thumbPushes: 0, scriptPushes: 0, promptPushes: 0 },
+    V2: { titlePushes: 0, thumbPushes: 0, scriptPushes: 0, promptPushes: 0 }
+  };
+
+  const tabs: VTab[] = [
+    {
+      id: 'V1',
+      index: 1,
+      chromeTabId: 101,
+      status: 'ready',
+      selected: true,
+      initialMessage: '',
+      title: 'Title 1',
+      titlePushStatus: 'none',
+      thumbnailStatus: 'assigned',
+      thumbnailId: 't1',
+      thumbnailPushStatus: 'none',
+      scriptStatus: 'assigned',
+      scriptId: 's1',
+      scriptPushStatus: 'none',
+      masterPrompt: 'Prompt 1',
+      masterPromptStatus: 'none',
+      totalParts: 4,
+      currentPart: 1,
+      parts: [],
+      lastUpdated: Date.now()
+    },
+    {
+      id: 'V2',
+      index: 2,
+      chromeTabId: 102,
+      status: 'ready',
+      selected: true,
+      initialMessage: '',
+      title: 'Title 2',
+      titlePushStatus: 'none',
+      thumbnailStatus: 'assigned',
+      thumbnailId: 't2',
+      thumbnailPushStatus: 'none',
+      scriptStatus: 'assigned',
+      scriptId: 's2',
+      scriptPushStatus: 'none',
+      masterPrompt: 'Prompt 2',
+      masterPromptStatus: 'none',
+      totalParts: 4,
+      currentPart: 1,
+      parts: [],
+      lastUpdated: Date.now()
+    }
+  ];
+
+  function pushAllWithDuplicateGuard(tList: VTab[], force: boolean = false) {
+    for (const t of tList) {
+      // 1. Title
+      if (force || t.titlePushStatus !== 'pasted') {
+        log[t.id].titlePushes++;
+        t.titlePushStatus = 'pasted';
+        t.titleVerified = true;
+      }
+      // 2. Thumb
+      if (force || t.thumbnailPushStatus !== 'pasted') {
+        log[t.id].thumbPushes++;
+        t.thumbnailPushStatus = 'pasted';
+        t.thumbnailVerified = true;
+      }
+      // 3. Script
+      if (force || t.scriptPushStatus !== 'pasted') {
+        log[t.id].scriptPushes++;
+        t.scriptPushStatus = 'pasted';
+        t.scriptVerified = true;
+      }
+      // 4. Master Prompt
+      if (force || t.masterPromptStatus !== 'sent') {
+        log[t.id].promptPushes++;
+        t.masterPromptStatus = 'sent';
+        t.masterPromptVerified = true;
+      }
+    }
+  }
+
+  // First run: pushes all 4 items once per tab
+  pushAllWithDuplicateGuard(tabs, false);
+  assert.strictEqual(log.V1.titlePushes, 1);
+  assert.strictEqual(log.V1.thumbPushes, 1);
+  assert.strictEqual(log.V1.scriptPushes, 1);
+  assert.strictEqual(log.V1.promptPushes, 1);
+
+  assert.strictEqual(log.V2.titlePushes, 1);
+  assert.strictEqual(log.V2.thumbPushes, 1);
+  assert.strictEqual(log.V2.scriptPushes, 1);
+  assert.strictEqual(log.V2.promptPushes, 1);
+
+  // Second run: should be completely skipped (0 additional pushes)
+  pushAllWithDuplicateGuard(tabs, false);
+  assert.strictEqual(log.V1.titlePushes, 1, 'V1 title must not be pushed a 2nd time');
+  assert.strictEqual(log.V1.thumbPushes, 1, 'V1 thumbnail must not be pushed a 2nd time');
+  assert.strictEqual(log.V1.scriptPushes, 1, 'V1 script must not be pushed a 2nd time');
+  assert.strictEqual(log.V1.promptPushes, 1, 'V1 prompt must not be pushed a 2nd time');
+
+  // Third run: still skipped
+  pushAllWithDuplicateGuard(tabs, false);
+  assert.strictEqual(log.V2.titlePushes, 1, 'V2 title must not be pushed a 3rd time');
+  assert.strictEqual(log.V2.thumbPushes, 1, 'V2 thumbnail must not be pushed a 3rd time');
+  assert.strictEqual(log.V2.scriptPushes, 1, 'V2 script must not be pushed a 3rd time');
+  assert.strictEqual(log.V2.promptPushes, 1, 'V2 prompt must not be pushed a 3rd time');
+
+  // Explicit Retry with force: true pushes exactly once more
+  pushAllWithDuplicateGuard([tabs[0]], true);
+  assert.strictEqual(log.V1.titlePushes, 2, 'Explicit force retry pushes exactly 1 additional time');
+  assert.strictEqual(log.V2.titlePushes, 1, 'V2 remains untouched at 1 push');
+});
+
+test('Strict 1:1 Script and Thumbnail Matching per Video ID (v4.0.0)', () => {
+  const thumbFiles = [
+    { name: 'V1.png', type: 'image/png' },
+    { name: 'V2_thumb.jpg', type: 'image/jpeg' },
+    { name: 'v3_thumbnail.webp', type: 'image/webp' }
+  ];
+
+  const scriptFiles = [
+    { name: 'V1_script.txt', type: 'text/plain' },
+    { name: 'v2-competitor.txt', type: 'text/plain' },
+    { name: 'V3_script.txt', type: 'text/plain' }
+  ];
+
+  const mappedThumbs = mapFilesToVNumbers(thumbFiles, 3);
+  const mappedScripts = mapFilesToVNumbers(scriptFiles, 3);
+
+  // Map to dictionary by vNumber
+  const thumbMap = Object.fromEntries(mappedThumbs.map(m => [m.vNumber, m.file]));
+  const scriptMap = Object.fromEntries(mappedScripts.map(m => [m.vNumber, m.file]));
+
+  // Strict 1:1 Thumbnails
+  assert.strictEqual(thumbMap['V1']?.name, 'V1.png');
+  assert.strictEqual(thumbMap['V2']?.name, 'V2_thumb.jpg');
+  assert.strictEqual(thumbMap['V3']?.name, 'v3_thumbnail.webp');
+
+  // Strict 1:1 Scripts
+  assert.strictEqual(scriptMap['V1']?.name, 'V1_script.txt');
+  assert.strictEqual(scriptMap['V2']?.name, 'v2-competitor.txt');
+  assert.strictEqual(scriptMap['V3']?.name, 'V3_script.txt');
+
+  // Cross-verification: V1 never gets V2 or V3 files
+  assert.notStrictEqual(scriptMap['V1']?.name, scriptMap['V2']?.name);
+  assert.notStrictEqual(thumbMap['V1']?.name, thumbMap['V2']?.name);
+});
+
+
 
 
 

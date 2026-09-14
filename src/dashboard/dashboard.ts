@@ -37,6 +37,7 @@ class DashboardController {
 
   private activeLogFilter: string = 'ALL';
   private showSelectedOnly: boolean = false;
+  private viewMode: 'table' | 'vcard' = 'table';
   private confirmActionCallback: (() => void) | null = null;
 
   constructor() {
@@ -87,6 +88,30 @@ class DashboardController {
   }
 
   private bindEvents(): void {
+    // View Switcher (Table View vs 4-Asset Verification Cards View)
+    const btnViewTable = document.getElementById('btn-view-table');
+    const btnViewVCard = document.getElementById('btn-view-vcard');
+    const containerTable = document.getElementById('view-table-container');
+    const containerVCard = document.getElementById('view-vcard-container');
+
+    const updateViewModeUI = (mode: 'table' | 'vcard') => {
+      this.viewMode = mode;
+      if (mode === 'table') {
+        btnViewTable?.classList.add('btn-primary');
+        btnViewVCard?.classList.remove('btn-primary');
+        if (containerTable) containerTable.style.display = 'block';
+        if (containerVCard) containerVCard.style.display = 'none';
+      } else {
+        btnViewTable?.classList.remove('btn-primary');
+        btnViewVCard?.classList.add('btn-primary');
+        if (containerTable) containerTable.style.display = 'none';
+        if (containerVCard) containerVCard.style.display = 'block';
+      }
+    };
+
+    btnViewTable?.addEventListener('click', () => updateViewModeUI('table'));
+    btnViewVCard?.addEventListener('click', () => updateViewModeUI('vcard'));
+
     // Collapsible sections
     document.querySelectorAll('.section-header').forEach((header) => {
       header.addEventListener('click', () => {
@@ -1234,6 +1259,7 @@ class DashboardController {
   private render(): void {
     this.renderStats();
     this.renderTabsTable();
+    this.renderVerificationCards();
     this.renderThumbnailsList();
     this.renderScriptsList();
     this.renderPartTracker();
@@ -1434,11 +1460,19 @@ class DashboardController {
       return;
     }
 
+    const isOriginalMode = (this.state.config.scriptMode || 'original') === 'original';
+
     tbody.innerHTML = displayTabs.map((tab) => {
       const hasTitle = Boolean(tab.title);
       const hasThumb = tab.thumbnailStatus !== 'none';
-      const hasScript = tab.scriptStatus !== 'none';
-      const all4InChat = Boolean(tab.titleInjected && tab.promptInjected && tab.thumbnailPasted && tab.scriptInjected);
+      const hasScript = tab.scriptStatus !== 'none' || Boolean(this.state.config.competitorScriptText?.trim());
+
+      const titleConfirmed = tab.titlePushStatus === 'pasted' || (tab.titleInjected && tab.titleVerified !== false);
+      const thumbConfirmed = tab.thumbnailPushStatus === 'pasted' || (tab.thumbnailPasted && tab.thumbnailVerified !== false);
+      const scriptConfirmed = isOriginalMode || tab.scriptPushStatus === 'pasted' || (tab.scriptInjected && tab.scriptVerified !== false);
+      const promptConfirmed = tab.masterPromptStatus === 'sent' || (tab.promptInjected && tab.masterPromptVerified !== false);
+
+      const all4InChat = titleConfirmed && thumbConfirmed && scriptConfirmed && promptConfirmed;
 
       const donePartNums = new Set(
         tab.parts
@@ -1459,6 +1493,102 @@ class DashboardController {
         }
       }
 
+      // Title column
+      let titleCellHtml = '';
+      if (titleConfirmed) {
+        titleCellHtml = `<span style="color: #4ade80; font-weight: 600;" title="${tab.title}">✓ Title — Pasted: ${this.truncate(tab.title, 14)}</span>`;
+      } else if (tab.titlePushStatus === 'failed') {
+        titleCellHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+            <span style="color: #f87171; font-weight: 600;" title="${tab.title}">✕ Failed / Not Pasted</span>
+            <button class="btn btn-xs btn-danger btn-table-push-title" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Retry pushing title">🔁 Retry</button>
+          </div>
+        `;
+      } else if (tab.titlePushStatus === 'pasting') {
+        titleCellHtml = `<span style="color: #60a5fa;" title="${tab.title}">⏳ Pasting...</span>`;
+      } else if (hasTitle) {
+        titleCellHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+            <span style="color: #facc15;" title="${tab.title}">○ Not Pasted: ${this.truncate(tab.title, 12)}</span>
+            <button class="btn btn-xs btn-table-push-title" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Push title to this tab">📥 Push</button>
+          </div>
+        `;
+      } else {
+        titleCellHtml = `<span style="color: var(--text-muted);">○ Empty</span>`;
+      }
+
+      // Thumbnail column
+      let thumbCellHtml = '';
+      if (thumbConfirmed) {
+        thumbCellHtml = `<span style="color: #4ade80; font-weight: 600;" title="${tab.thumbnailName}">✓ Thumbnail — Pasted: ${this.truncate(tab.thumbnailName || '', 12)}</span>`;
+      } else if (tab.thumbnailPushStatus === 'failed') {
+        thumbCellHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+            <span style="color: #f87171; font-weight: 600;" title="${tab.thumbnailName || ''}">✕ Failed / Not Pasted</span>
+            <button class="btn btn-xs btn-danger btn-table-push-thumb" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Retry pasting thumbnail">🔁 Retry</button>
+          </div>
+        `;
+      } else if (tab.thumbnailPushStatus === 'uploading' || tab.thumbnailUploading) {
+        thumbCellHtml = `<span style="color: #60a5fa;" title="${tab.thumbnailName || ''}">⏳ Pasting...</span>`;
+      } else if (hasThumb) {
+        thumbCellHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+            <span style="color: #facc15;" title="${tab.thumbnailName || ''}">○ Not Pasted: ${this.truncate(tab.thumbnailName || '', 10)}</span>
+            <button class="btn btn-xs btn-warning btn-table-push-thumb" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Paste thumbnail via clipboard">🖼️ Paste</button>
+          </div>
+        `;
+      } else {
+        thumbCellHtml = `<span style="color: var(--text-muted);">○ Empty</span>`;
+      }
+
+      // Script column
+      let scriptCellHtml = '';
+      if (isOriginalMode) {
+        scriptCellHtml = `<span style="color: #94a3b8;" title="Outline mode is active (Original Script Mode)">✓ Script — Outline Mode (N/A)</span>`;
+      } else if (scriptConfirmed) {
+        scriptCellHtml = `<span style="color: #4ade80; font-weight: 600;" title="${tab.scriptName}">✓ Script — Pasted: ${this.truncate(tab.scriptName || '', 12)}</span>`;
+      } else if (tab.scriptPushStatus === 'failed') {
+        scriptCellHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+            <span style="color: #f87171; font-weight: 600;" title="${tab.scriptName || ''}">✕ Failed / Not Pasted</span>
+            <button class="btn btn-xs btn-danger btn-table-push-script" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Retry embedding script">🔁 Retry</button>
+          </div>
+        `;
+      } else if (tab.scriptPushStatus === 'uploading') {
+        scriptCellHtml = `<span style="color: #60a5fa;" title="${tab.scriptName || ''}">⏳ Pasting...</span>`;
+      } else if (hasScript) {
+        scriptCellHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+            <span style="color: #facc15;" title="${tab.scriptName || ''}">○ Not Pasted: ${this.truncate(tab.scriptName || '', 10)}</span>
+            <button class="btn btn-xs btn-warning btn-table-push-script" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Embed competitor script">📄 Embed</button>
+          </div>
+        `;
+      } else {
+        scriptCellHtml = `<span style="color: var(--text-muted);">○ Empty</span>`;
+      }
+
+      // Prompt & In-Chat Status column
+      let promptCellHtml = '';
+      if (promptConfirmed) {
+        promptCellHtml = `<div style="color: #4ade80; font-weight: 600; font-size: 11px;">✓ Master Prompt — Sent</div>`;
+      } else if (tab.masterPromptStatus === 'failed') {
+        promptCellHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+            <span style="color: #f87171; font-weight: 600; font-size: 11px;">✕ Failed / Not Pasted</span>
+            <button class="btn btn-xs btn-danger btn-table-push-prompt" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Retry sending prompt">🔁 Retry</button>
+          </div>
+        `;
+      } else if (tab.masterPromptStatus === 'sending') {
+        promptCellHtml = `<div style="color: #60a5fa; font-size: 11px;">⏳ Prompt — Sending...</div>`;
+      } else {
+        promptCellHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+            <span style="color: #facc15; font-size: 11px;">○ Prompt — Not Sent</span>
+            <button class="btn btn-xs btn-primary btn-table-push-prompt" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Send master prompt">📝 Send</button>
+          </div>
+        `;
+      }
+
       return `
         <tr>
           <td>
@@ -1466,52 +1596,20 @@ class DashboardController {
           </td>
           <td><strong>${tab.id}</strong></td>
           <td class="col-hide-compact" style="color: var(--text-secondary);">${tab.chromeTabId || 'None'}</td>
+          <td>${titleCellHtml}</td>
+          <td>${thumbCellHtml}</td>
+          <td>${scriptCellHtml}</td>
           <td>
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-              ${tab.titleInjected
-                ? `<span style="color: #4ade80; font-weight: 500;" title="${tab.title}">✓ In Chat: ${this.truncate(tab.title, 14)}</span>`
-                : (hasTitle
-                    ? `<span style="color: #facc15;" title="${tab.title}">⏳ ${this.truncate(tab.title, 12)}</span>`
-                    : '<span style="color: var(--text-muted);">○ Empty</span>'
-                  )
-              }
-              ${hasTitle && !tab.titleInjected ? `<button class="btn btn-xs btn-table-push-title" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Push title to this tab">📥 Push</button>` : ''}
-            </div>
-          </td>
-          <td>
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-              ${tab.thumbnailPasted
-                ? `<span style="color: #4ade80; font-weight: 500;" title="${tab.thumbnailName}">✓ Pasted: ${this.truncate(tab.thumbnailName || '', 12)}</span>`
-                : (hasThumb
-                    ? `<span style="color: #facc15;" title="${tab.thumbnailName}">⏳ ${this.truncate(tab.thumbnailName || '', 10)}</span>`
-                    : '<span style="color: var(--text-muted);">○ Empty</span>'
-                  )
-              }
-              ${hasThumb && !tab.thumbnailPasted ? `<button class="btn btn-xs btn-warning btn-table-push-thumb" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Paste thumbnail via clipboard to this tab">🖼️ Paste</button>` : ''}
-            </div>
-          </td>
-          <td>
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-              ${tab.scriptInjected
-                ? `<span style="color: #4ade80; font-weight: 500;" title="${tab.scriptName}">✓ Embedded: ${this.truncate(tab.scriptName || '', 12)}</span>`
-                : (hasScript
-                    ? `<span style="color: #facc15;" title="${tab.scriptName}">⏳ ${this.truncate(tab.scriptName || '', 10)}</span>`
-                    : '<span style="color: var(--text-muted);">○ Empty</span>'
-                  )
-              }
-              ${hasScript && !tab.scriptInjected ? `<button class="btn btn-xs btn-warning btn-table-push-script" data-id="${tab.id}" style="padding: 1px 5px; font-size: 10px;" title="Embed competitor script into this tab">📄 Embed</button>` : ''}
-            </div>
-          </td>
-          <td>
+            ${promptCellHtml}
             ${all4InChat
-              ? `<span class="badge badge-success" style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e;" title="All 4 assets in chat! Ready for safe 10s–15s run">🟢 4/4 IN CHAT</span>`
+              ? `<span class="badge badge-success" style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e; margin-top: 4px; display: inline-block;" title="All 4 assets confirmed in chat!">🟢 4/4 CONFIRMED</span>`
               : (tab.status === 'running'
-                  ? `<span class="badge badge-running">RUNNING</span>`
+                  ? `<span class="badge badge-running" style="margin-top: 4px; display: inline-block;">RUNNING</span>`
                   : (tab.status === 'completed'
-                      ? `<span class="badge badge-success">DONE</span>`
+                      ? `<span class="badge badge-success" style="margin-top: 4px; display: inline-block;">DONE</span>`
                       : (tab.status === 'error'
-                          ? `<span class="badge badge-error">ERROR</span>`
-                          : `<span class="badge badge-warning" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid #ef4444;" title="Chat blocked: Missing assets in chat">🔴 MISSING IN CHAT</span>`
+                          ? `<span class="badge badge-error" style="margin-top: 4px; display: inline-block;">ERROR</span>`
+                          : `<span class="badge badge-warning" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid #ef4444; margin-top: 4px; display: inline-block;" title="Chat blocked: Missing assets in chat">🔴 MISSING IN CHAT</span>`
                         )
                     )
                 )
@@ -1565,11 +1663,12 @@ class DashboardController {
         this.copyToClipboard(promptText, target);
       });
     });
+
     tbody.querySelectorAll('.btn-table-push-all').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const id = (e.currentTarget as HTMLElement).dataset.id;
         if (id) {
-          chrome.runtime.sendMessage({ type: 'PUSH_ALL_ASSETS_TO_CHATS', target: id }, () => this.syncState());
+          chrome.runtime.sendMessage({ type: 'PUSH_ALL_ASSETS_TO_CHATS', target: id, force: true }, () => this.syncState());
         }
       });
     });
@@ -1578,7 +1677,7 @@ class DashboardController {
       btn.addEventListener('click', (e) => {
         const id = (e.currentTarget as HTMLElement).dataset.id;
         if (id) {
-          chrome.runtime.sendMessage({ type: 'PUSH_TITLES_TO_CHATS', target: id }, () => this.syncState());
+          chrome.runtime.sendMessage({ type: 'PUSH_TITLES_TO_CHATS', target: id, force: true }, () => this.syncState());
         }
       });
     });
@@ -1587,7 +1686,7 @@ class DashboardController {
       btn.addEventListener('click', (e) => {
         const id = (e.currentTarget as HTMLElement).dataset.id;
         if (id) {
-          chrome.runtime.sendMessage({ type: 'PUSH_THUMBNAILS_TO_CHATS', target: id }, () => this.syncState());
+          chrome.runtime.sendMessage({ type: 'PUSH_THUMBNAILS_TO_CHATS', target: id, force: true }, () => this.syncState());
         }
       });
     });
@@ -1596,12 +1695,21 @@ class DashboardController {
       btn.addEventListener('click', (e) => {
         const id = (e.currentTarget as HTMLElement).dataset.id;
         if (id) {
-          chrome.runtime.sendMessage({ type: 'PUSH_SCRIPTS_TO_CHATS', target: id }, () => this.syncState());
+          chrome.runtime.sendMessage({ type: 'PUSH_SCRIPTS_TO_CHATS', target: id, force: true }, () => this.syncState());
         }
       });
     });
 
-    // Attach row events
+    tbody.querySelectorAll('.btn-table-push-prompt').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).dataset.id;
+        if (id) {
+          chrome.runtime.sendMessage({ type: 'PUSH_PROMPT_TO_CHATS', target: id, force: true }, () => this.syncState());
+        }
+      });
+    });
+
+    // Attach selection and tab control row events
     tbody.querySelectorAll('.chk-tab-select').forEach((chk) => {
       chk.addEventListener('change', (e) => {
         const id = (e.target as HTMLElement).dataset.id;
@@ -1662,6 +1770,258 @@ class DashboardController {
         const vId = (e.currentTarget as HTMLElement).dataset.id;
         if (vId) {
           chrome.runtime.sendMessage({ type: 'REMOVE_TAB', vNumber: vId }, () => this.syncState());
+        }
+      });
+    });
+  }
+
+  private renderVerificationCards(): void {
+    const grid = document.getElementById('verification-cards-grid');
+    const summaryBadge = document.getElementById('vcard-global-summary');
+    if (!grid) return;
+
+    const displayTabs = this.showSelectedOnly
+      ? this.state.tabs.filter((t) => t.selected)
+      : this.state.tabs;
+
+    const isOriginalMode = (this.state.config.scriptMode || 'original') === 'original';
+
+    // Count confirmed tabs
+    let fullyConfirmedCount = 0;
+    this.state.tabs.forEach((tab) => {
+      const titleOk = tab.titlePushStatus === 'pasted' || (tab.titleInjected && tab.titleVerified !== false);
+      const thumbOk = tab.thumbnailPushStatus === 'pasted' || (tab.thumbnailPasted && tab.thumbnailVerified !== false);
+      const scriptOk = isOriginalMode || tab.scriptPushStatus === 'pasted' || (tab.scriptInjected && tab.scriptVerified !== false);
+      const promptOk = tab.masterPromptStatus === 'sent' || (tab.promptInjected && tab.masterPromptVerified !== false);
+      if (titleOk && thumbOk && scriptOk && promptOk) {
+        fullyConfirmedCount++;
+      }
+    });
+
+    if (summaryBadge) {
+      summaryBadge.textContent = `All 4 Confirmed: ${fullyConfirmedCount} / ${this.state.tabs.length}`;
+      summaryBadge.style.color = fullyConfirmedCount === this.state.tabs.length && this.state.tabs.length > 0 ? '#4ade80' : '#facc15';
+    }
+
+    if (displayTabs.length === 0) {
+      grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 24px;">No tabs available. Duplicate or open Meta.ai chats in Section 1.</div>`;
+      return;
+    }
+
+    grid.innerHTML = displayTabs.map((tab) => {
+      const hasTitle = Boolean(tab.title);
+      const hasThumb = tab.thumbnailStatus !== 'none';
+      const hasScript = tab.scriptStatus !== 'none' || Boolean(this.state.config.competitorScriptText?.trim());
+
+      const titleConfirmed = tab.titlePushStatus === 'pasted' || (tab.titleInjected && tab.titleVerified !== false);
+      const thumbConfirmed = tab.thumbnailPushStatus === 'pasted' || (tab.thumbnailPasted && tab.thumbnailVerified !== false);
+      const scriptConfirmed = isOriginalMode || tab.scriptPushStatus === 'pasted' || (tab.scriptInjected && tab.scriptVerified !== false);
+      const promptConfirmed = tab.masterPromptStatus === 'sent' || (tab.promptInjected && tab.masterPromptVerified !== false);
+
+      const allConfirmed = titleConfirmed && thumbConfirmed && scriptConfirmed && promptConfirmed;
+      const hasAnyFailed = tab.titlePushStatus === 'failed' || tab.thumbnailPushStatus === 'failed' || tab.scriptPushStatus === 'failed' || tab.masterPromptStatus === 'failed';
+
+      // 1. Title Status Line
+      let titleClass = 'status-unpasted';
+      let titleHtml = '';
+      if (titleConfirmed) {
+        titleClass = 'status-pasted';
+        titleHtml = `
+          <span class="vcard-item-label">✓ Title — Pasted</span>
+          <span class="vcard-item-detail" title="${tab.title}">${this.truncate(tab.title, 20)}</span>
+        `;
+      } else if (tab.titlePushStatus === 'failed') {
+        titleClass = 'status-failed';
+        titleHtml = `
+          <span class="vcard-item-label">✕ Title — Failed / Not Pasted</span>
+          <button class="btn btn-xs btn-danger btn-table-push-title vcard-item-btn" data-id="${tab.id}" title="Retry pushing title">🔁 Retry</button>
+        `;
+      } else if (tab.titlePushStatus === 'pasting') {
+        titleClass = 'status-pending';
+        titleHtml = `<span class="vcard-item-label">⏳ Title — Pasting & Verifying...</span>`;
+      } else if (hasTitle) {
+        titleClass = 'status-unpasted';
+        titleHtml = `
+          <span class="vcard-item-label">○ Title — Not Pasted</span>
+          <button class="btn btn-xs btn-primary btn-table-push-title vcard-item-btn" data-id="${tab.id}" title="Push title">📥 Push</button>
+        `;
+      } else {
+        titleClass = 'status-na';
+        titleHtml = `<span class="vcard-item-label">○ Title — Empty</span>`;
+      }
+
+      // 2. Thumbnail Status Line
+      let thumbClass = 'status-unpasted';
+      let thumbHtml = '';
+      if (thumbConfirmed) {
+        thumbClass = 'status-pasted';
+        thumbHtml = `
+          <span class="vcard-item-label">✓ Thumbnail — Pasted</span>
+          <span class="vcard-item-detail" title="${tab.thumbnailName || ''}">${this.truncate(tab.thumbnailName || 'Uploaded', 18)}</span>
+        `;
+      } else if (tab.thumbnailPushStatus === 'failed') {
+        thumbClass = 'status-failed';
+        thumbHtml = `
+          <span class="vcard-item-label">✕ Thumbnail — Failed / Not Pasted</span>
+          <button class="btn btn-xs btn-danger btn-table-push-thumb vcard-item-btn" data-id="${tab.id}" title="Retry pasting thumbnail">🔁 Retry</button>
+        `;
+      } else if (tab.thumbnailPushStatus === 'uploading' || tab.thumbnailUploading) {
+        thumbClass = 'status-pending';
+        thumbHtml = `<span class="vcard-item-label">⏳ Thumbnail — Pasting...</span>`;
+      } else if (hasThumb) {
+        thumbClass = 'status-unpasted';
+        thumbHtml = `
+          <span class="vcard-item-label">○ Thumbnail — Not Pasted</span>
+          <button class="btn btn-xs btn-warning btn-table-push-thumb vcard-item-btn" data-id="${tab.id}" title="Paste thumbnail">🖼️ Paste</button>
+        `;
+      } else {
+        thumbClass = 'status-na';
+        thumbHtml = `<span class="vcard-item-label">○ Thumbnail — Empty</span>`;
+      }
+
+      // 3. Script Status Line
+      let scriptClass = 'status-unpasted';
+      let scriptHtml = '';
+      if (isOriginalMode) {
+        scriptClass = 'status-na';
+        scriptHtml = `<span class="vcard-item-label">✓ Script — Outline Mode (N/A)</span>`;
+      } else if (scriptConfirmed) {
+        scriptClass = 'status-pasted';
+        scriptHtml = `
+          <span class="vcard-item-label">✓ Script — Pasted</span>
+          <span class="vcard-item-detail" title="${tab.scriptName || ''}">${this.truncate(tab.scriptName || 'Embedded', 18)}</span>
+        `;
+      } else if (tab.scriptPushStatus === 'failed') {
+        scriptClass = 'status-failed';
+        scriptHtml = `
+          <span class="vcard-item-label">✕ Script — Failed / Not Pasted</span>
+          <button class="btn btn-xs btn-danger btn-table-push-script vcard-item-btn" data-id="${tab.id}" title="Retry embedding script">🔁 Retry</button>
+        `;
+      } else if (tab.scriptPushStatus === 'uploading') {
+        scriptClass = 'status-pending';
+        scriptHtml = `<span class="vcard-item-label">⏳ Script — Pasting...</span>`;
+      } else if (hasScript) {
+        scriptClass = 'status-unpasted';
+        scriptHtml = `
+          <span class="vcard-item-label">○ Script — Not Pasted</span>
+          <button class="btn btn-xs btn-warning btn-table-push-script vcard-item-btn" data-id="${tab.id}" title="Embed script">📄 Embed</button>
+        `;
+      } else {
+        scriptClass = 'status-na';
+        scriptHtml = `<span class="vcard-item-label">○ Script — Empty</span>`;
+      }
+
+      // 4. Master Prompt Status Line
+      let promptClass = 'status-unpasted';
+      let promptHtml = '';
+      if (promptConfirmed) {
+        promptClass = 'status-sent';
+        promptHtml = `<span class="vcard-item-label">✓ Master Prompt — Sent</span>`;
+      } else if (tab.masterPromptStatus === 'failed') {
+        promptClass = 'status-failed';
+        promptHtml = `
+          <span class="vcard-item-label">✕ Master Prompt — Failed / Not Pasted</span>
+          <button class="btn btn-xs btn-danger btn-table-push-prompt vcard-item-btn" data-id="${tab.id}" title="Retry sending prompt">🔁 Retry</button>
+        `;
+      } else if (tab.masterPromptStatus === 'sending') {
+        promptClass = 'status-pending';
+        promptHtml = `<span class="vcard-item-label">⏳ Master Prompt — Sending...</span>`;
+      } else {
+        promptClass = 'status-unpasted';
+        promptHtml = `
+          <span class="vcard-item-label">○ Master Prompt — Not Sent</span>
+          <button class="btn btn-xs btn-primary btn-table-push-prompt vcard-item-btn" data-id="${tab.id}" title="Send prompt">📝 Send</button>
+        `;
+      }
+
+      return `
+        <div class="vcard ${allConfirmed ? 'all-confirmed' : ''} ${hasAnyFailed ? 'has-failed' : ''}">
+          <div class="vcard-header">
+            <div class="vcard-title-wrap">
+              <span class="vcard-vid">${tab.id}</span>
+              <span class="vcard-tabid">Tab #${tab.chromeTabId || 'None'}</span>
+            </div>
+            <div class="vcard-header-actions">
+              ${allConfirmed
+                ? `<span class="badge badge-success" style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e;">4/4 CONFIRMED</span>`
+                : `<button class="btn btn-xs btn-primary btn-vcard-push-all" data-id="${tab.id}" title="Push all 4 assets to ${tab.id}">⚡ Push All 4</button>`
+              }
+              <button class="btn btn-xs btn-table-focus" data-tabid="${tab.chromeTabId}" title="Bring Meta.ai tab to front">Focus</button>
+            </div>
+          </div>
+          <div class="vcard-list">
+            <div class="vcard-item ${titleClass}">
+              ${titleHtml}
+            </div>
+            <div class="vcard-item ${thumbClass}">
+              ${thumbHtml}
+            </div>
+            <div class="vcard-item ${scriptClass}">
+              ${scriptHtml}
+            </div>
+            <div class="vcard-item ${promptClass}">
+              ${promptHtml}
+            </div>
+          </div>
+          <div class="vcard-footer">
+            <span style="color: var(--text-secondary);">Parts: <strong>${tab.parts.filter(p => p.status === 'done').length}/${tab.totalParts || 0}</strong></span>
+            <span class="badge badge-${tab.status}">${tab.status.toUpperCase()}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach event listeners for verification card buttons
+    grid.querySelectorAll('.btn-table-push-title').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).dataset.id;
+        if (id) {
+          chrome.runtime.sendMessage({ type: 'PUSH_TITLES_TO_CHATS', target: id, force: true }, () => this.syncState());
+        }
+      });
+    });
+
+    grid.querySelectorAll('.btn-table-push-thumb').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).dataset.id;
+        if (id) {
+          chrome.runtime.sendMessage({ type: 'PUSH_THUMBNAILS_TO_CHATS', target: id, force: true }, () => this.syncState());
+        }
+      });
+    });
+
+    grid.querySelectorAll('.btn-table-push-script').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).dataset.id;
+        if (id) {
+          chrome.runtime.sendMessage({ type: 'PUSH_SCRIPTS_TO_CHATS', target: id, force: true }, () => this.syncState());
+        }
+      });
+    });
+
+    grid.querySelectorAll('.btn-table-push-prompt').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).dataset.id;
+        if (id) {
+          chrome.runtime.sendMessage({ type: 'PUSH_PROMPT_TO_CHATS', target: id, force: true }, () => this.syncState());
+        }
+      });
+    });
+
+    grid.querySelectorAll('.btn-vcard-push-all').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).dataset.id;
+        if (id) {
+          chrome.runtime.sendMessage({ type: 'PUSH_ALL_ASSETS_TO_CHATS', target: id, force: true }, () => this.syncState());
+        }
+      });
+    });
+
+    grid.querySelectorAll('.btn-table-focus').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const tabId = parseInt((e.currentTarget as HTMLElement).dataset.tabid || '0', 10);
+        if (tabId) {
+          chrome.tabs.update(tabId, { active: true });
         }
       });
     });

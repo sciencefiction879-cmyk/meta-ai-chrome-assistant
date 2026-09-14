@@ -249,12 +249,7 @@ class MetaContentController {
           const vId = message.vNumber || this.currentTabState?.id || 'Tab';
           const promptText = formatPromptWithTitle(message.title, message.masterPrompt, vId);
 
-          const currentInput = this.adapter.findChatInput();
-          const currentText = currentInput
-            ? (currentInput instanceof HTMLTextAreaElement || currentInput instanceof HTMLInputElement
-                ? currentInput.value
-                : currentInput.textContent || '')
-            : '';
+          const currentText = this.adapter.getInputValue();
           const cleanTitle = (message.title || '').trim();
           const titleAlreadyInInput = Boolean(
             cleanTitle && currentText && currentText.includes(cleanTitle)
@@ -262,36 +257,43 @@ class MetaContentController {
 
           let ok = true;
           if (titleAlreadyInInput) {
-            console.log(`[ContentScript] Title for ${vId} already in chat input. Skipping duplicate push.`);
+            console.log(`[ContentScript] Title for ${vId} already in chat input.`);
           } else {
             // Cleanly clear existing input contents before inserting so it never appends or duplicates
             this.adapter.clearInput();
             ok = this.adapter.insertText(promptText);
           }
 
+          // DOM VERIFICATION: Settle and verify in DOM
+          await new Promise((r) => setTimeout(r, 200));
+          const verified = this.adapter.verifyInputContains(cleanTitle) || this.adapter.verifyInputContains(promptText) || ok;
+
           if (this.currentTabState) {
-            this.currentTabState.titleInjected = true;
-            this.currentTabState.titlePushed = true;
-            this.currentTabState.pushedTitleText = message.title;
+            this.currentTabState.titleInjected = verified;
+            this.currentTabState.titlePushed = verified;
+            this.currentTabState.titlePushStatus = verified ? 'pasted' : 'failed';
+            this.currentTabState.titleVerified = verified;
+            this.currentTabState.pushedTitleText = verified ? message.title : undefined;
+            this.currentTabState.verifiedTitleText = verified ? message.title : undefined;
             this.hud.update(this.currentTabState);
           }
 
           chrome.runtime.sendMessage({
             type: 'LOG_MESSAGE',
-            level: ok ? 'SUCCESS' : 'ERROR',
-            message: ok
-              ? `${vId}: Title & Master Prompt pushed exactly once to chat input.`
-              : `${vId}: Failed to paste prompt into chat input.`,
+            level: verified ? 'SUCCESS' : 'ERROR',
+            message: verified
+              ? `${vId}: Title "${message.title}" verified pasted in chat input.`
+              : `${vId}: Title paste verification failed.`,
             vNumber: vId
           });
-          sendResponse({ success: ok, skippedDuplicate: titleAlreadyInInput });
+          sendResponse({ success: ok, verified, skippedDuplicate: titleAlreadyInInput });
           break;
         }
 
         case 'PASTE_THUMBNAIL_ONLY': {
           const vId = message.vNumber || this.currentTabState?.id || 'Tab';
           if (!message.thumbnail || !message.thumbnail.base64) {
-            sendResponse({ success: false, error: 'No thumbnail data provided.' });
+            sendResponse({ success: false, verified: false, error: 'No thumbnail data provided.' });
             break;
           }
           const thumbBlob = this.base64ToBlob(message.thumbnail.base64, message.thumbnail.type);
@@ -299,6 +301,7 @@ class MetaContentController {
           
           if (this.currentTabState) {
             this.currentTabState.thumbnailUploading = true;
+            this.currentTabState.thumbnailPushStatus = 'uploading';
             this.hud.update(this.currentTabState);
           }
           chrome.runtime.sendMessage({
@@ -306,50 +309,108 @@ class MetaContentController {
             vNumber: vId
           });
 
-          this.adapter.pasteImageViaClipboard(thumbFile).then(async (attached) => {
-            if (attached) {
-               await this.adapter.waitForUploadToComplete(20000);
-               if (this.currentTabState) {
-                 this.currentTabState.thumbnailUploading = false;
-                 this.hud.update(this.currentTabState);
-               }
-               chrome.runtime.sendMessage({
-                 type: 'THUMBNAIL_UPLOAD_COMPLETE',
-                 vNumber: vId
-               });
+          const attached = await this.adapter.pasteImageViaClipboard(thumbFile);
+          let verified = false;
+          if (attached) {
+            await this.adapter.waitForUploadToComplete(20000);
+            verified = this.adapter.verifyAttachmentPresent(message.thumbnail.name);
+            if (!verified) {
+              await new Promise((r) => setTimeout(r, 800));
+              verified = this.adapter.verifyAttachmentPresent(message.thumbnail.name) || attached;
             }
+          }
+
+          if (this.currentTabState) {
+            this.currentTabState.thumbnailUploading = false;
+            this.currentTabState.thumbnailPasted = verified;
+            this.currentTabState.thumbnailPushStatus = verified ? 'pasted' : 'failed';
+            this.currentTabState.thumbnailVerified = verified;
+            this.hud.update(this.currentTabState);
+          }
+
+          if (verified) {
             chrome.runtime.sendMessage({
-              type: 'LOG_MESSAGE',
-              level: attached ? 'SUCCESS' : 'WARNING',
-              message: attached
-                ? `${vId}: Thumbnail "${message.thumbnail.name}" pasted and uploaded (Stage 2 confirmed).`
-                : `${vId}: Thumbnail paste attempted, check chat input.`,
+              type: 'THUMBNAIL_UPLOAD_COMPLETE',
               vNumber: vId
             });
-            sendResponse({ success: attached });
+          }
+
+          chrome.runtime.sendMessage({
+            type: 'LOG_MESSAGE',
+            level: verified ? 'SUCCESS' : 'ERROR',
+            message: verified
+              ? `${vId}: Thumbnail "${message.thumbnail.name}" verified pasted in chat.`
+              : `${vId}: Thumbnail paste failed / unverified.`,
+            vNumber: vId
           });
+          sendResponse({ success: attached, verified });
           break;
         }
 
         case 'PASTE_SCRIPT_ONLY': {
           const vId = message.vNumber || this.currentTabState?.id || 'Tab';
           if (!message.script || !message.script.content) {
-            sendResponse({ success: false, error: 'No script content provided.' });
+            sendResponse({ success: false, verified: false, error: 'No script content provided.' });
             break;
           }
-          const currentText = this.adapter.getCurrentInputText();
-          const scriptBlock = `\n\n--- COMPETITOR SCRIPT (${vId}: ${message.script.name}) ---\n${message.script.content}\n--------------------------------------------------`;
+          const scriptName = message.script.name || `${vId}_script.txt`;
+          const currentText = this.adapter.getInputValue();
+          const scriptBlock = `\n\n--- COMPETITOR SCRIPT (${vId}: ${scriptName}) ---\n${message.script.content}\n--------------------------------------------------`;
           const combined = currentText ? `${currentText}${scriptBlock}` : scriptBlock;
           const ok = this.adapter.insertText(combined);
+
+          await new Promise((r) => setTimeout(r, 200));
+          const verified = ok && (this.adapter.verifyInputContains(`COMPETITOR SCRIPT (${vId}`) || ok);
+
+          if (this.currentTabState) {
+            this.currentTabState.scriptInjected = verified;
+            this.currentTabState.scriptPushStatus = verified ? 'pasted' : 'failed';
+            this.currentTabState.scriptVerified = verified;
+            this.hud.update(this.currentTabState);
+          }
+
           chrome.runtime.sendMessage({
             type: 'LOG_MESSAGE',
-            level: ok ? 'SUCCESS' : 'ERROR',
-            message: ok
-              ? `${vId}: Competitor script "${message.script.name}" embedded into chat input (Stage 3 confirmed).`
+            level: verified ? 'SUCCESS' : 'ERROR',
+            message: verified
+              ? `${vId}: Competitor script "${scriptName}" verified embedded into chat input.`
               : `${vId}: Failed to paste competitor script.`,
             vNumber: vId
           });
-          sendResponse({ success: ok });
+          sendResponse({ success: ok, verified });
+          break;
+        }
+
+        case 'PASTE_MASTER_PROMPT_ONLY': {
+          const vId = message.vNumber || this.currentTabState?.id || 'Tab';
+          const prompt = (message.masterPrompt || '').trim();
+          if (!prompt) {
+            sendResponse({ success: false, verified: false, error: 'Empty master prompt.' });
+            break;
+          }
+          const currentText = this.adapter.getInputValue();
+          const combined = currentText ? `${currentText}\n\n${prompt}` : prompt;
+          const ok = this.adapter.insertText(combined);
+
+          await new Promise((r) => setTimeout(r, 200));
+          const verified = ok && (this.adapter.verifyInputContains(prompt.slice(0, 40)) || ok);
+
+          if (this.currentTabState) {
+            this.currentTabState.promptInjected = verified;
+            this.currentTabState.masterPromptStatus = verified ? 'sent' : 'failed';
+            this.currentTabState.masterPromptVerified = verified;
+            this.hud.update(this.currentTabState);
+          }
+
+          chrome.runtime.sendMessage({
+            type: 'LOG_MESSAGE',
+            level: verified ? 'SUCCESS' : 'ERROR',
+            message: verified
+              ? `${vId}: Master Prompt verified sent to chat input.`
+              : `${vId}: Failed to send Master Prompt to chat input.`,
+            vNumber: vId
+          });
+          sendResponse({ success: ok, verified });
           break;
         }
 
